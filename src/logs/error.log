@@ -1,0 +1,35 @@
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-18T04:26:52.109Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Already in room","game":"mahjong"},"timestamp":"2026-04-18T04:30:19.589Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Already in room","game":"mahjong"},"timestamp":"2026-04-18T04:30:57.939Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-18T04:32:08.281Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-18T04:34:00.367Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-18T04:37:05.980Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Already in room","game":"mahjong"},"timestamp":"2026-04-18T04:43:50.834Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Testing","game":"mahjong"},"timestamp":"2026-04-18T04:58:10.549Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Testing","game":"mahjong"},"timestamp":"2026-04-18T05:04:39.781Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Testing","game":"mahjong"},"timestamp":"2026-04-18T05:05:14.620Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Testing","game":"mahjong"},"timestamp":"2026-04-18T05:16:10.710Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Testing","game":"mahjong"},"timestamp":"2026-04-18T05:20:50.137Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Testing","game":"mahjong"},"timestamp":"2026-04-18T05:22:53.687Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"socket is not defined","game":"mahjong"},"timestamp":"2026-04-18T05:36:01.021Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"jwt is not defined","game":"mahjong"},"timestamp":"2026-04-19T09:58:13.802Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"jwt malformed","game":"mahjong"},"timestamp":"2026-04-19T10:02:10.119Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"jwt malformed","game":"mahjong"},"timestamp":"2026-04-19T10:02:40.614Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"jwt expired","game":"mahjong"},"timestamp":"2026-04-19T10:04:47.874Z"}
+{"level":"error","message":{"action":"LEAVE_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-19T10:05:59.965Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"player is not defined","game":"mahjong"},"timestamp":"2026-04-19T11:36:40.759Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"player is not defined","game":"mahjong"},"timestamp":"2026-04-19T11:41:15.333Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"player is not defined","game":"mahjong"},"timestamp":"2026-04-19T11:45:09.465Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"player is not defined","game":"mahjong"},"timestamp":"2026-04-19T11:47:02.251Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Request failed with status code 500","game":"mahjong"},"timestamp":"2026-04-19T15:01:49.753Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"EVENTS is not defined","game":"mahjong"},"timestamp":"2026-04-19T15:18:51.156Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"socket is not defined","game":"mahjong"},"timestamp":"2026-04-20T03:17:23.244Z"}
+{"level":"error","message":{"action":"LEAVE_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-20T06:47:58.076Z"}
+{"level":"error","message":{"action":"LEAVE_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-20T06:51:02.760Z"}
+{"level":"error","message":{"action":"LEAVE_ROOM_FAIL","error":"Cannot read properties of undefined (reading 'to')","game":"mahjong"},"timestamp":"2026-04-20T06:54:39.909Z"}
+{"level":"error","message":{"action":"START_ROUND_FAIL","error":"Request failed with status code 409","roomId":"1","type":"API"},"timestamp":"2026-04-20T10:38:49.600Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"roomId is not defined","game":"mahjong"},"timestamp":"2026-04-21T03:14:14.371Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"roomId is not defined","game":"mahjong"},"timestamp":"2026-04-21T03:18:34.007Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"roomId is not defined","game":"mahjong"},"timestamp":"2026-04-21T03:22:18.883Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"roomData is not defined","game":"mahjong"},"timestamp":"2026-04-22T07:37:23.920Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"total is not defined","game":"mahjong"},"timestamp":"2026-04-22T12:28:03.261Z"}

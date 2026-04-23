@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mahjong Socket Test</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      #log {
+        height: 250px;
+        overflow-y: auto;
+        background: #111;
+        color: #0f0;
+        padding: 10px;
+      }
+      .section {
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Mahjong WebSocket Test Client</h2>
+
+    <label>Sanctum Token:</label><br />
+    <input
+      type="text"
+      id="sanctumTokenInput"
+      placeholder="Enter Sanctum token"
+      size="60"
+    />
+
+    <br /><br />
+
+    <label>Room ID:</label><br />
+    <input id="roomIdInput" placeholder="Enter Room ID" />
+
+    <br /><br />
+
+    <button onclick="connectSocket()">Connect</button>
+    <button onclick="sendPing()">Send Ping</button>
+
+    <br /><br />
+
+    <button onclick="joinRoom()">Join Room</button>
+    <button onclick="leaveRoom()">Leave Room</button>
+
+    <div class="section">
+      <h3 id="statusDisplay">Status: -</h3>
+      <h3 id="countdownDisplay">Countdown: -</h3>
+    </div>
+
+    <div class="section">
+      <h4>Dice</h4>
+      <h3 id="diceDisplay">-</h3>
+    </div>
+
+    <div class="section">
+      <h4>First Player</h4>
+      <h3 id="firstPlayerDisplay">-</h3>
+    </div>
+
+    <div class="section">
+      <h4>Players</h4>
+      <pre id="playersDisplay"></pre>
+    </div>
+
+    <div class="section">
+      <h4>Round Players</h4>
+      <pre id="roundPlayersDisplay"></pre>
+    </div>
+
+    <div class="section">
+      <h4>Guests</h4>
+      <pre id="guestsDisplay"></pre>
+    </div>
+
+    <h4>Logs</h4>
+    <pre id="log"></pre>
+
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+    <script>
+      let socket;
+      let wsToken = null;
+      let sanctumToken = null;
+
+      const API_URL = "http://localhost:8000/api";
+
+      let currentState = {
+        status: null,
+        players: [],
+        roundPlayers: [],
+        guests: [],
+        countdownRemaining: null,
+        dice: null,
+        firstPlayer: null,
+      };
+
+      function renderPlayers(players) {
+        document.getElementById("playersDisplay").textContent = players
+          .map((p) => `${p.name} (${p.userId})`)
+          .join("\n");
+      }
+
+      function renderRoundPlayers(roundPlayers) {
+        document.getElementById("roundPlayersDisplay").textContent =
+          roundPlayers
+            .map((p) => `Seat ${p.seat} → ${p.name} → auto(${p.is_auto})`)
+            .join("\n");
+      }
+
+      function renderGuests(guests) {
+        document.getElementById("guestsDisplay").textContent = guests
+          .map((g) => `${g.name}`)
+          .join("\n");
+      }
+
+      // ================= LOG =================
+      function log(message) {
+        const logEl = document.getElementById("log");
+        logEl.textContent += message + "\n";
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // ================= UI HELPERS =================
+      function updateStatus(status) {
+        document.getElementById("statusDisplay").textContent =
+          "Status: " + status;
+      }
+
+      function updateCountdown(value) {
+        document.getElementById("countdownDisplay").textContent =
+          "Countdown: " + value + "s";
+      }
+
+      function renderState(state) {
+        console.log("STATE:", state);
+
+        // 🔥 keep your original merge behavior
+        currentState = {
+          ...currentState,
+          ...state,
+        };
+
+        const {
+          status,
+          players = [],
+          roundPlayers = [],
+          guests = [],
+          countdownRemaining,
+          dice,
+          firstPlayer,
+        } = currentState;
+
+        updateStatus(status);
+
+        if (countdownRemaining !== null) {
+          updateCountdown(countdownRemaining);
+        } else {
+          updateCountdown("-");
+        }
+
+        renderPlayers(players);
+        renderRoundPlayers(roundPlayers);
+        renderGuests(guests);
+
+        // ===== ✅ NEW: DICE =====
+        if (dice) {
+          updateDice([dice.d1, dice.d2], dice.total);
+        }
+
+        // ===== ✅ NEW: FIRST PLAYER =====
+        if (firstPlayer) {
+          updateFirstPlayer(firstPlayer.user_id, firstPlayer.user_name);
+        }
+
+        log("📦 State updated");
+      }
+      function updateDice(dice, total) {
+        document.getElementById("diceDisplay").textContent =
+          `Dice: ${dice[0]} + ${dice[1]} = ${total}`;
+      }
+
+      function updateFirstPlayer(userId, userName) {
+        document.getElementById("firstPlayerDisplay").textContent =
+          `User: ${userName} (${userId})`;
+
+        highlightFirstPlayer(userId);
+      }
+
+      function highlightFirstPlayer(userId) {
+        const lines = currentState.roundPlayers.map((p) => {
+          const isFirst = p.userId === userId ? " 👈 FIRST" : "";
+          return `Seat ${p.seat} → ${p.name} → auto(${p.is_auto})${isFirst}`;
+        });
+
+        document.getElementById("roundPlayersDisplay").textContent =
+          lines.join("\n");
+      }
+
+      // ================= API =================
+      async function getWsToken() {
+        const res = await fetch(`${API_URL}/users/web-socket/token/generate`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + sanctumToken,
+            "Content-Type": "application/json",
+          },
+        });
+
+        const data = await res.json();
+        return data.data.ws_token;
+      }
+
+      async function getJoinToken(roomId) {
+        const res = await fetch(
+          `${API_URL}/users/mah-jong-game-rooms/${roomId}/join`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + sanctumToken,
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        const data = await res.json();
+        return data.data.token;
+      }
+
+      // ================= CONNECT =================
+      async function connectSocket() {
+        sanctumToken = document.getElementById("sanctumTokenInput").value;
+
+        if (!sanctumToken) {
+          log("⚠️ Enter Sanctum token");
+          return;
+        }
+
+        try {
+          wsToken = await getWsToken();
+
+          socket = io("http://localhost:3000", {
+            transports: ["websocket"],
+            auth: { token: wsToken },
+          });
+
+          socket.on("connect", () => {
+            log("✅ Connected: " + socket.id);
+          });
+
+          socket.on("disconnect", (reason) => {
+            log("🔌 Disconnected: " + reason);
+          });
+
+          socket.on("connect_error", async (err) => {
+            log("❌ Connection Error: " + err.message);
+
+            if (err.message === "invalid_or_expired_ws_token") {
+              wsToken = await getWsToken();
+              socket.auth.token = wsToken;
+              socket.connect();
+            }
+          });
+
+          socket.on("ws:refresh_required", async () => {
+            log("🔄 Refresh required");
+
+            wsToken = await getWsToken();
+
+            socket.emit("ws:refresh", {
+              token: wsToken,
+            });
+          });
+
+          socket.on("ws:refresh_failed", () => {
+            log("❌ Refresh failed → reconnect");
+            socket.disconnect();
+          });
+
+          // ===== DEBUG =====
+          socket.onAny((event, ...args) => {
+            console.log("📡 EVENT:", event, args);
+          });
+
+          // ================= MAHJONG EVENTS =================
+
+          socket.on("mahjong:current_state", (data) => {
+            log("✅ Current state shown");
+            renderState(data);
+          });
+
+          socket.on("mahjong:join_room_success", (data) => {
+            log("✅ Joined Room");
+            renderState(data);
+          });
+
+          socket.on("mahjong:player_joined", (data) => {
+            log("👤 New Player Joined");
+          });
+
+          socket.on("mahjong:player_left", (data) => {
+            log("👋 Player Left: " + data.userId);
+          });
+
+          socket.on("mahjong:waiting_for_players", () => {
+            log("⏳ Waiting for players");
+            updateStatus("waiting");
+          });
+
+          // 🔥 UPDATE PLAYERS
+          socket.on("mahjong:update_players", (data) => {
+            log("🔄 Players updated");
+
+            currentState.players = data;
+
+            renderPlayers(currentState.players);
+          });
+
+          // 🔥 UPDATE GUESTS
+          socket.on("mahjong:update_guests", (data) => {
+            log("🔄 Guests updated");
+
+            currentState.guests = data;
+
+            renderGuests(currentState.guests);
+          });
+
+          // 🔥 UPDATE ROUND PLAYERS
+          socket.on("mahjong:update_round_players", (data) => {
+            log("🔄 Round Players updated");
+
+            currentState.roundPlayers = data;
+
+            renderRoundPlayers(currentState.roundPlayers);
+          });
+
+          socket.on("mahjong:round_player_status_updated", (data) => {
+            log("🔄 Round Player Status Updated: " + JSON.stringify(data));
+
+            currentState.roundPlayers = data;
+
+            renderRoundPlayers(currentState.roundPlayers);
+          });
+
+          socket.on("mahjong:countdown_started", () => {
+            log("⏳ Countdown started");
+            updateStatus("countdown");
+          });
+
+          socket.on("mahjong:countdown", (data) => {
+            // log(data.remaining);
+            updateCountdown(data.remaining);
+          });
+
+          socket.on("testing", (data) => {
+            log("TESTINGGGGGGGG");
+          });
+
+          socket.on("mahjong:countdown_cancelled", () => {
+            log("❌ Countdown cancelled");
+            updateCountdown("-");
+            updateStatus("waiting");
+          });
+
+          socket.on("mahjong:round_started", (data) => {
+            log("🎮 Round started");
+            updateStatus("playing");
+          });
+
+          // start rolling the dice 🎲
+          socket.on("mahjong:start_rolling_dice", (data) => {
+            log("🎲 Dice Rolling");
+          });
+
+          // 🎲 DICE ROLLED
+          socket.on("mahjong:dice_rolled", (data) => {
+            log("🎲 Dice Rolled: " + JSON.stringify(data));
+
+            const { dice, total } = data;
+
+            updateDice(dice, total);
+          });
+
+          // 👑 FIRST PLAYER SELECTED
+          socket.on("mahjong:user_to_play_first_selected", (data) => {
+            log(
+              "👑 First Player Selected: " +
+                data.user_id_to_play_first +
+                " (" +
+                data.user_name_to_play_first +
+                ")",
+            );
+
+            updateFirstPlayer(
+              data.user_id_to_play_first,
+              data.user_name_to_play_first,
+            );
+          });
+
+          socket.on("mahjong:round_end", (data) => {
+            log("ROUND END");
+          });
+
+          socket.on("mahjong:error", (err) => {
+            log("❌ Error: " + JSON.stringify(err));
+          });
+
+          socket.on("pong", (data) => {
+            log("📩 Pong: " + JSON.stringify(data));
+          });
+        } catch (err) {
+          log("❌ Setup failed");
+        }
+      }
+
+      // ================= JOIN =================
+      async function joinRoom() {
+        if (!socket || !socket.connected) {
+          log("⚠️ Not connected");
+          return;
+        }
+
+        const roomId = document.getElementById("roomIdInput").value;
+
+        if (!roomId) {
+          log("⚠️ Enter Room ID");
+          return;
+        }
+
+        try {
+          const joinToken = await getJoinToken(roomId);
+
+          socket.emit("mahjong:join_room", {
+            roomId,
+            token: joinToken,
+          });
+
+          log("➡️ Joining room " + roomId);
+        } catch (err) {
+          log("❌ Failed to get join token");
+        }
+      }
+
+      // ================= LEAVE =================
+      function leaveRoom() {
+        if (!socket || !socket.connected) {
+          log("⚠️ Not connected");
+          return;
+        }
+
+        socket.emit("mahjong:leave_room");
+        log("➡️ Leaving room");
+      }
+
+      // ================= PING =================
+      function sendPing() {
+        if (!socket || !socket.connected) {
+          log("⚠️ Not connected");
+          return;
+        }
+
+        socket.emit("ping", { test: true });
+        log("➡️ Sent ping");
+      }
+    </script>
+  </body>
+</html>

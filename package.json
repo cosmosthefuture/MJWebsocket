@@ -1,0 +1,24 @@
+{
+  "name": "realtime-server",
+  "version": "1.0.0",
+  "description": "Realtime game server (Socket.IO + Express)",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/server.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.19.2",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.3",
+    "socket.io": "^4.7.5",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.3"
+  }
+}

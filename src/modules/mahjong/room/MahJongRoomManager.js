@@ -133,9 +133,9 @@ export default class MahJongRoomManager {
         } else if (phase == "user_to_play_first_selected") {
           const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
           const firstPlayer = JSON.parse(firstPlayerRaw);
-          socket.emit("mahjong:user_to_play_first_selected", {
-            user_id_to_play_first: firstPlayer.user_id,
-            user_name_to_play_first: firstPlayer.user_name,
+          socket.emit("mahjong:user_to_play", {
+            user_id: firstPlayer.user_id,
+            user_name: firstPlayer.user_name,
           });
         } else if (phase == "shuffling_tiles") {
           io.to(SOCKET_ROOM(roomId)).emit("mahjong:start_shuffling");
@@ -452,9 +452,9 @@ export default class MahJongRoomManager {
       "user_to_play_first_selected",
     );
 
-    io.to(SOCKET_ROOM(roomId)).emit("mahjong:user_to_play_first_selected", {
-      user_id_to_play_first: user_to_play_first.user_id,
-      user_name_to_play_first: user_to_play_first.name,
+    io.to(SOCKET_ROOM(roomId)).emit("mahjong:user_to_play", {
+      user_id: user_to_play_first.user_id,
+      user_name: user_to_play_first.name,
     });
 
     await this.shuffleAndDealTiles(roomId, user_to_play_first.user_id, io);
@@ -498,6 +498,7 @@ export default class MahJongRoomManager {
       .map(JSON.parse)
       .sort((a, b) => a.seat - b.seat);
 
+    // console.log("PLAYERS:: ", players)
     // 4. Clear old hands + old player view hands
     for (const player of players) {
       await redis.del(HAND_KEY(roomId, player.userId));
@@ -547,8 +548,13 @@ export default class MahJongRoomManager {
         // Own hand → actual tiles
         if (currentPlayer.userId === targetPlayer.userId) {
           handState.push({
+            discard_tile_id: null,
+            pong: null,
+            chow: null,
+            kong: null,
             userId: targetPlayer.userId,
             isSelf: true,
+            seat_position: targetPlayer.seat,
             tileCount: parsedTiles.length,
             tiles: parsedTiles,
           });
@@ -557,8 +563,13 @@ export default class MahJongRoomManager {
         // Other players → hidden tiles
         else {
           handState.push({
+            discard_tile_id: null,
+            pong: null,
+            chow: null,
+            kong: null,
             userId: targetPlayer.userId,
             isSelf: false,
+            seat_position: targetPlayer.seat,
             tileCount: parsedTiles.length,
             tiles: Array.from({ length: parsedTiles.length }, () => ({
               id: null,
@@ -789,17 +800,17 @@ export default class MahJongRoomManager {
           "user_to_play_first_selected",
         );
 
-        io.to(SOCKET_ROOM(roomId)).emit("mahjong:user_to_play_first_selected", {
-          user_id_to_play_first: user_to_play_first.user_id,
-          user_name_to_play_first: user_to_play_first.name,
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:user_to_play", {
+          user_id: user_to_play_first.user_id,
+          user_name: user_to_play_first.name,
         });
       } else if (phase == "user_to_play_first_selected") {
         const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
         const firstPlayer = JSON.parse(firstPlayerRaw);
 
-        io.to(SOCKET_ROOM(roomId)).emit("mahjong:user_to_play_first_selected", {
-          user_id_to_play_first: firstPlayer.user_id,
-          user_name_to_play_first: firstPlayer.user_name,
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:user_to_play", {
+          user_id: firstPlayer.user_id,
+          user_name: firstPlayer.user_name,
         });
       } else if (phase == "shuffling_tiles") {
         const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
@@ -886,7 +897,6 @@ export default class MahJongRoomManager {
         io.to(SOCKET_ROOM(roomId)).emit("mahjong:round_end");
         await this.wait(5000);
         await this.clearRoomData(roomId, io);
-
       } else if (phase == "round_end") {
         const round = await redis.get(ROUND_KEY(roomId));
         const roundData = JSON.parse(round);

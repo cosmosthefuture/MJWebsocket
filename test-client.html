@@ -471,18 +471,18 @@
           });
 
           // 👑 FIRST PLAYER SELECTED
-          socket.on("mahjong:user_to_play_first_selected", (data) => {
+          socket.on("mahjong:user_to_play", (data) => {
             log(
               "👑 First Player Selected: " +
-                data.user_id_to_play_first +
+                data.user_id +
                 " (" +
-                data.user_name_to_play_first +
+                data.user_name +
                 ")",
             );
 
             updateFirstPlayer(
-              data.user_id_to_play_first,
-              data.user_name_to_play_first,
+              data.user_id,
+              data.user_name,
             );
           });
 

@@ -23,6 +23,17 @@ const COUNTDOWN_KEY = (roomId) => `room:${roomId}:countdown_end`;
 const ROOM_DICE_KEY = (roomId) => `room:${roomId}:dice`;
 const ROOM_FIRST_PLAYER_KEY = (roomId) => `room:${roomId}:first_player`;
 
+const WALL_KEY = (roomId) => `room:${roomId}:round:wall`;
+
+const HAND_KEY = (roomId, userId) => `room:${roomId}:round:hand:${userId}`;
+
+const DISCARD_KEY = (roomId) => `room:${roomId}:round:discards`;
+
+const LAST_DISCARD_KEY = (roomId) => `room:${roomId}:round:last_discard`;
+
+const PLAYER_VIEW_HAND_KEY = (roomId, userId) =>
+  `room:${roomId}:round:player_view_hand:${userId}`;
+
 export default class MahJongRoomManager {
   static async joinRoom({ roomId, user, socket, io }) {
     const { id: userId, name } = user;
@@ -49,6 +60,7 @@ export default class MahJongRoomManager {
       await redis.set(PLAYER_ROOM_KEY(userId), roomId);
 
       socket.join(SOCKET_ROOM(roomId));
+      socket.join(`user:${userId}`);
 
       const status = await redis.get(ROOM_STATUS_KEY(roomId));
 
@@ -125,6 +137,18 @@ export default class MahJongRoomManager {
             user_id_to_play_first: firstPlayer.user_id,
             user_name_to_play_first: firstPlayer.user_name,
           });
+        } else if (phase == "shuffling_tiles") {
+          io.to(SOCKET_ROOM(roomId)).emit("mahjong:start_shuffling");
+        } else if (phase == "dealing_tiles") {
+          const hand_state = await redis.get(
+            PLAYER_VIEW_HAND_KEY(roomId, userId),
+          );
+          if (hand_state) {
+            io.to(`user:${userId}`).emit(
+              "mahjong:initial_hand_state",
+              JSON.parse(hand_state),
+            );
+          }
         } else if (phase == "round_end") {
           socket.emit("mahjong:round_end");
         }
@@ -297,7 +321,6 @@ export default class MahJongRoomManager {
     const interval = setInterval(async () => {
       const now = Date.now();
       const remaining = Math.max(0, Math.ceil((endTime - now) / 1000));
-      console.log(remaining);
       const count = await redis.hlen(PLAYERS_KEY(roomId));
 
       // ❌ cancel if not enough players
@@ -434,8 +457,10 @@ export default class MahJongRoomManager {
       user_name_to_play_first: user_to_play_first.name,
     });
 
+    await this.shuffleAndDealTiles(roomId, user_to_play_first.user_id, io);
+
     // this temporary round end codes // might delete later
-    await this.wait(3000);
+    await this.wait(10000);
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "round_end");
     const round = await redis.get(ROUND_KEY(roomId));
     const roundData = JSON.parse(round);
@@ -443,6 +468,120 @@ export default class MahJongRoomManager {
     io.to(SOCKET_ROOM(roomId)).emit("mahjong:round_end");
     await this.wait(5000);
     await this.clearRoomData(roomId, io);
+  }
+
+  // ================= SHUFFLE and DEAL =================
+  static async shuffleAndDealTiles(roomId, firstPlayerId, io) {
+    const round = await redis.get(ROUND_KEY(roomId));
+    const roundData = JSON.parse(round);
+
+    await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "shuffling_tiles");
+
+    io.to(SOCKET_ROOM(roomId)).emit("mahjong:start_shuffling");
+
+    // 1. Get shuffled full tile objects from backend
+    const tiles = await ToLaravelService.getShuffledTiles(roundData.roundId);
+
+    await this.wait(5000);
+
+    // 2. Clear old wall and store shuffled wall
+    await redis.del(WALL_KEY(roomId));
+
+    for (const tile of tiles) {
+      await redis.rpush(WALL_KEY(roomId), JSON.stringify(tile));
+    }
+
+    // 3. Get round players ordered by seat
+    const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
+
+    const players = Object.values(roundPlayersRaw)
+      .map(JSON.parse)
+      .sort((a, b) => a.seat - b.seat);
+
+    // 4. Clear old hands + old player view hands
+    for (const player of players) {
+      await redis.del(HAND_KEY(roomId, player.userId));
+
+      await redis.del(PLAYER_VIEW_HAND_KEY(roomId, player.userId));
+    }
+
+    // 5. Deal 13 tiles round-robin
+    for (let i = 0; i < 13; i++) {
+      for (const player of players) {
+        const tile = await redis.lpop(WALL_KEY(roomId));
+
+        await redis.rpush(HAND_KEY(roomId, player.userId), tile);
+      }
+    }
+
+    // 6. Give 14th tile to first player
+    const extraTile = await redis.lpop(WALL_KEY(roomId));
+
+    await redis.rpush(HAND_KEY(roomId, firstPlayerId), extraTile);
+
+    // 7. Reset discard
+    await redis.del(DISCARD_KEY(roomId));
+    await redis.del(LAST_DISCARD_KEY(roomId));
+
+    // =================================================
+    // 8. Build + Store + Send player-specific hand state
+    // =================================================
+
+    await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "dealing_tiles");
+    io.to(SOCKET_ROOM(roomId)).emit("mahjong:dealing_tiles");
+    // temp waiting. might delete later
+    // await this.wait(5000);
+
+    for (const currentPlayer of players) {
+      const handState = [];
+
+      for (const targetPlayer of players) {
+        const rawTiles = await redis.lrange(
+          HAND_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const parsedTiles = rawTiles.map((tile) => JSON.parse(tile));
+
+        // Own hand → actual tiles
+        if (currentPlayer.userId === targetPlayer.userId) {
+          handState.push({
+            userId: targetPlayer.userId,
+            isSelf: true,
+            tileCount: parsedTiles.length,
+            tiles: parsedTiles,
+          });
+        }
+
+        // Other players → hidden tiles
+        else {
+          handState.push({
+            userId: targetPlayer.userId,
+            isSelf: false,
+            tileCount: parsedTiles.length,
+            tiles: Array.from({ length: parsedTiles.length }, () => ({
+              id: null,
+              type: "hidden",
+              number: null,
+              copy_no: null,
+            })),
+          });
+        }
+      }
+
+      // Store full player view in Redis
+      await redis.set(
+        PLAYER_VIEW_HAND_KEY(roomId, currentPlayer.userId),
+        JSON.stringify(handState),
+      );
+
+      // Send to user's private room
+      io.to(`user:${currentPlayer.userId}`).emit(
+        "mahjong:initial_hand_state",
+        handState,
+      );
+    }
   }
 
   // ================= END ROUND =================
@@ -480,6 +619,18 @@ export default class MahJongRoomManager {
       allUsers.map((userId) => redis.del(PLAYER_ROOM_KEY(userId))),
     );
 
+    const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
+
+    const roundPlayers = Object.values(roundPlayersRaw)
+      .map(JSON.parse)
+      .sort((a, b) => a.seat - b.seat);
+
+    // delete hand-related keys first
+    for (const player of roundPlayers) {
+      await redis.del(HAND_KEY(roomId, player.userId));
+      await redis.del(PLAYER_VIEW_HAND_KEY(roomId, player.userId));
+    }
+
     await Promise.all([
       redis.del(ROOM_KEY(roomId)),
       redis.del(MATCH_KEY(roomId)),
@@ -492,6 +643,9 @@ export default class MahJongRoomManager {
       redis.del(COUNTDOWN_KEY(roomId)),
       redis.del(ROOM_DICE_KEY(roomId)),
       redis.del(ROOM_FIRST_PLAYER_KEY(roomId)),
+      redis.del(WALL_KEY(roomId)),
+      redis.del(DISCARD_KEY(roomId)),
+      redis.del(LAST_DISCARD_KEY(roomId)),
     ]);
 
     io.in(SOCKET_ROOM(roomId)).socketsLeave(SOCKET_ROOM(roomId));
@@ -566,6 +720,7 @@ export default class MahJongRoomManager {
     roomMemoryStore.set(roomId, data);
     const state = await this.getState(roomId);
     socket.join(SOCKET_ROOM(roomId));
+    socket.join(`user:${user.id}`);
     socket.emit("mahjong:current_state", state);
     const status = await redis.get(ROOM_STATUS_KEY(roomId));
     if (!status || status == "waiting") {
@@ -575,7 +730,7 @@ export default class MahJongRoomManager {
       this.runCountdown(roomId, endTime, io);
     } else if (status == "playing") {
       const round_exist = await redis.exists(ROUND_KEY(roomId));
-      if(!round_exist) {
+      if (!round_exist) {
         await this.startRound(roomId, io);
         return;
       }
@@ -646,6 +801,92 @@ export default class MahJongRoomManager {
           user_id_to_play_first: firstPlayer.user_id,
           user_name_to_play_first: firstPlayer.user_name,
         });
+      } else if (phase == "shuffling_tiles") {
+        const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
+        const firstPlayer = JSON.parse(firstPlayerRaw);
+        await this.shuffleAndDealTiles(roomId, firstPlayer.user_id, io);
+      } else if (phase == "dealing_tiles") {
+        const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
+
+        const players = Object.values(roundPlayersRaw)
+          .map(JSON.parse)
+          .sort((a, b) => a.seat - b.seat);
+
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:dealing_tiles");
+        // temp waiting. might delete later
+        // await this.wait(2000);
+
+        for (const currentPlayer of players) {
+          const handState = [];
+          const data = await redis.get(
+            PLAYER_VIEW_HAND_KEY(roomId, currentPlayer.userId),
+          );
+          if (data) {
+            io.to(`user:${currentPlayer.userId}`).emit(
+              "mahjong:initial_hand_state",
+              JSON.parse(data),
+            );
+            continue;
+          }
+
+          for (const targetPlayer of players) {
+            const rawTiles = await redis.lrange(
+              HAND_KEY(roomId, targetPlayer.userId),
+              0,
+              -1,
+            );
+
+            const parsedTiles = rawTiles.map((tile) => JSON.parse(tile));
+
+            // Own hand → actual tiles
+            if (currentPlayer.userId === targetPlayer.userId) {
+              handState.push({
+                userId: targetPlayer.userId,
+                isSelf: true,
+                tileCount: parsedTiles.length,
+                tiles: parsedTiles,
+              });
+            }
+
+            // Other players → hidden tiles
+            else {
+              handState.push({
+                userId: targetPlayer.userId,
+                isSelf: false,
+                tileCount: parsedTiles.length,
+                tiles: Array.from({ length: parsedTiles.length }, () => ({
+                  id: null,
+                  type: "hidden",
+                  number: null,
+                  copy_no: null,
+                })),
+              });
+            }
+          }
+
+          // Store full player view in Redis
+          await redis.set(
+            PLAYER_VIEW_HAND_KEY(roomId, currentPlayer.userId),
+            JSON.stringify(handState),
+          );
+
+          // Send to user's private room
+          io.to(`user:${currentPlayer.userId}`).emit(
+            "mahjong:initial_hand_state",
+            handState,
+          );
+        }
+
+        // this temporary round end codes // might delete later
+        await this.wait(10000);
+        await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "round_end");
+        const round = await redis.get(ROUND_KEY(roomId));
+        const roundData = JSON.parse(round);
+        await ToLaravelService.endRound(roundData.roundId);
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:round_end");
+        await this.wait(5000);
+        await this.clearRoomData(roomId, io);
+
       } else if (phase == "round_end") {
         const round = await redis.get(ROUND_KEY(roomId));
         const roundData = JSON.parse(round);

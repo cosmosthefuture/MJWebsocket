@@ -33,3 +33,7 @@
 {"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"roomId is not defined","game":"mahjong"},"timestamp":"2026-04-21T03:22:18.883Z"}
 {"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"roomData is not defined","game":"mahjong"},"timestamp":"2026-04-22T07:37:23.920Z"}
 {"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"total is not defined","game":"mahjong"},"timestamp":"2026-04-22T12:28:03.261Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"currentPlayer is not defined","game":"mahjong"},"timestamp":"2026-04-25T04:50:44.671Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"currentPlayer is not defined","game":"mahjong"},"timestamp":"2026-04-25T04:50:49.632Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"Unexpected end of JSON input","game":"mahjong"},"timestamp":"2026-04-25T05:00:02.763Z"}
+{"level":"error","message":{"action":"JOIN_ROOM_FAIL","error":"handState is not defined","game":"mahjong"},"timestamp":"2026-04-25T05:32:46.661Z"}

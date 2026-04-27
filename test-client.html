@@ -22,6 +22,17 @@
   <body>
     <h2>Mahjong WebSocket Test Client</h2>
 
+    <div class="section">
+      <h4>Mahjong Tiles</h4>
+      <h3>My Hand</h3>
+      <div id="myHandTiles"></div>
+
+      <h3>Other Players</h3>
+      <div id="otherPlayersTiles"></div>
+    </div>
+    <br />
+    <br />
+
     <label>Sanctum Token:</label><br />
     <input
       type="text"
@@ -199,6 +210,82 @@
           lines.join("\n");
       }
 
+      function tileLabel(tile) {
+        if (!tile || tile.type === "hidden") {
+          return "🀫 Hidden";
+        }
+
+        if (tile.type === "dot") {
+          return `● Dot ${tile.number}`;
+        }
+
+        if (tile.type === "bamboo") {
+          return `🎋 Bamboo ${tile.number}`;
+        }
+
+        return "Unknown";
+      }
+
+      function renderMyHandTiles(tiles) {
+        const el = document.getElementById("myHandTiles");
+
+        if (!tiles || !tiles.length) {
+          el.innerHTML = "-";
+          return;
+        }
+
+        el.innerHTML = tiles
+          .map(
+            (tile) => `
+        <span style="
+          display:inline-block;
+          border:1px solid #ccc;
+          padding:8px;
+          margin:4px;
+          border-radius:6px;
+          background:#fff;
+        ">
+          ${tileLabel(tile)}
+        </span>
+      `,
+          )
+          .join("");
+      }
+
+      function renderOtherPlayersTiles(players) {
+        const el = document.getElementById("otherPlayersTiles");
+
+        if (!players || !players.length) {
+          el.innerHTML = "-";
+          return;
+        }
+
+        el.innerHTML = players
+          .map(
+            (player) => `
+        <div style="margin-bottom:16px;">
+          <strong>${player.userId || player.name}</strong><br/>
+          ${player.tiles
+            .map(
+              (tile) => `
+                <span style="
+                  display:inline-block;
+                  border:1px solid #ccc;
+                  padding:8px;
+                  margin:4px;
+                  border-radius:6px;
+                  background:#f5f5f5;
+                ">
+                  ${tileLabel(tile)}
+                </span>
+              `,
+            )
+            .join("")}
+        </div>
+      `,
+          )
+          .join("");
+      }
       // ================= API =================
       async function getWsToken() {
         const res = await fetch(`${API_URL}/users/web-socket/token/generate`, {
@@ -397,6 +484,27 @@
               data.user_id_to_play_first,
               data.user_name_to_play_first,
             );
+          });
+
+          socket.on("mahjong:start_shuffling", (data) => {
+            log("Shuffling Tiles");
+          });
+
+          socket.on("mahjong:dealing_tiles", (data) => {
+            log("Dealing Tiles");
+          });
+
+          socket.on("mahjong:initial_hand_state", (data) => {
+            log("🀄 Initial Hand State Received");
+            console.log(data);
+
+            const myPlayer = data.find((player) => player.isSelf === true);
+            const otherPlayers = data.filter(
+              (player) => player.isSelf === false,
+            );
+
+            renderMyHandTiles(myPlayer ? myPlayer.tiles : []);
+            renderOtherPlayersTiles(otherPlayers);
           });
 
           socket.on("mahjong:round_end", (data) => {

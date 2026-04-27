@@ -105,12 +105,31 @@ class ToLaravelService {
   async endRound(roundId) {
     try {
       const res = await apiClient.post(
-        `/internal/mah-jong-game-rounds/${roundId}/end-round`
+        `/internal/mah-jong-game-rounds/${roundId}/end-round`,
       );
     } catch (err) {
       logger.error({
         type: "API",
         action: "ROUND_END",
+        roomId,
+        error: err.message,
+      });
+
+      throw err;
+    }
+  }
+
+  async getShuffledTiles() {
+    try {
+      const res = await apiClient.get(
+        `/internal/mah-jong-game-rounds/get-shuffled-tiles`,
+      );
+      // console.log(res.data.data);
+      return res.data.data
+    } catch (err) {
+      logger.error({
+        type: "API",
+        action: "GET_SHUFFLED_TILES",
         roomId,
         error: err.message,
       });

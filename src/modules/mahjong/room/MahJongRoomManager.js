@@ -979,7 +979,22 @@ export default class MahJongRoomManager {
           0,
           -1,
         );
+
+        const rawPong = await redis.lrange(
+          PONG_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const rawChow = await redis.lrange(
+          CHOW_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
         const kongData = rawKong.map((item) => JSON.parse(item));
+        const pongData = rawPong.map((item) => JSON.parse(item));
+        const chowData = rawChow.map((item) => JSON.parse(item));
 
         /**
          * Self → real tiles
@@ -987,8 +1002,8 @@ export default class MahJongRoomManager {
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
             last_discard_tile: null,
-            pong: null,
-            chow: null,
+            pong: pongData,
+            chow: chowData,
             kong: kongData,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
@@ -1003,8 +1018,8 @@ export default class MahJongRoomManager {
            */
           handState.push({
             last_discard_tile: null,
-            pong: null,
-            chow: null,
+            pong: pongData,
+            chow: chowData,
             kong: kongData,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
@@ -1712,7 +1727,7 @@ export default class MahJongRoomManager {
     const discardTile = tiles.find(
       (tile) => Number(tile.id) === Number(tileId),
     );
-    console.log("DIS TILE", discardTile);
+    // console.log("DIS TILE", discardTile);
     // if (!discardTile) {
     //   return {
     //     success: false,
@@ -1749,7 +1764,7 @@ export default class MahJongRoomManager {
     );
 
     const last_dis_tile = await redis.get(LAST_DISCARD_KEY(roomId));
-    console.log("HHHHHHHHHH", last_dis_tile);
+    // console.log("HHHHHHHHHH", last_dis_tile);
 
     const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
 
@@ -3923,13 +3938,13 @@ export default class MahJongRoomManager {
       const alreadyDiscarded = alreadyDiscardedRaw
         ? JSON.parse(alreadyDiscardedRaw)
         : null;
-        console.log("ALREADY_DISCARD", alreadyDiscarded);
-        console.log("NEXT_PLAYER", nextPlayer);
+      // console.log("ALREADY_DISCARD", alreadyDiscarded);
+      // console.log("NEXT_PLAYER", nextPlayer);
       if (
         winningDataExist ||
         alreadyDiscarded?.discard_by == nextPlayer.userId
       ) {
-        console.log("shoud stop");
+        // console.log("shoud stop");
         // remaining = 0;
         clearInterval(countdownInterval);
 
@@ -4613,71 +4628,173 @@ export default class MahJongRoomManager {
 
   static async sortHand(socket, payload, io) {
     const { roomId, userId } = payload;
+
     const playing_phase_with_tile = await redis.get(
       PLAYING_PHASE_WITH_TILE_KEY(roomId),
     );
+
     if (playing_phase_with_tile !== "playing_game_with_tile") {
       return;
     }
+
     const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
 
     const players = Object.values(roundPlayersRaw)
       .map(JSON.parse)
       .sort((a, b) => a.seat - b.seat);
 
+    const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
+    const discardTile = discardTileRaw ? JSON.parse(discardTileRaw) : null;
+    const discard_tile = discardTile ? discardTile.tile : null;
+
     const handState = [];
 
+    // const smartSortTiles = (tiles) => {
+    //   const tileCountMap = {};
+
+    //   for (const tile of tiles) {
+    //     const key = `${tile.type}_${tile.number}`;
+    //     tileCountMap[key] = (tileCountMap[key] || 0) + 1;
+    //   }
+
+    //   return tiles.sort((a, b) => {
+    //     const typeOrder = {
+    //       bamboo: 1,
+    //       dot: 2,
+    //     };
+
+    //     const keyA = `${a.type}_${a.number}`;
+    //     const keyB = `${b.type}_${b.number}`;
+
+    //     const countA = tileCountMap[keyA] || 0;
+    //     const countB = tileCountMap[keyB] || 0;
+
+    //     if (countA !== countB) {
+    //       return countB - countA;
+    //     }
+
+    //     const typeA = typeOrder[a.type] || 999;
+    //     const typeB = typeOrder[b.type] || 999;
+
+    //     if (typeA !== typeB) {
+    //       return typeA - typeB;
+    //     }
+
+    //     if (a.number !== b.number) {
+    //       return a.number - b.number;
+    //     }
+
+    //     return (a.copy_no || 0) - (b.copy_no || 0);
+    //   });
+    // };
+
     const smartSortTiles = (tiles) => {
-      const tileCountMap = {};
+      const typeOrder = {
+        bamboo: 1,
+        dot: 2,
+      };
+
+      /**
+       * =====================================
+       * 1. Build map
+       * =====================================
+       */
+      const map = {};
 
       for (const tile of tiles) {
         const key = `${tile.type}_${tile.number}`;
-        tileCountMap[key] = (tileCountMap[key] || 0) + 1;
+        if (!map[key]) map[key] = [];
+        map[key].push(tile);
       }
 
-      return tiles.sort((a, b) => {
-        const typeOrder = {
-          bamboo: 1,
-          dot: 2,
-        };
+      const used = new Set();
 
-        const keyA = `${a.type}_${a.number}`;
-        const keyB = `${b.type}_${b.number}`;
+      const result = [];
 
-        const countA = tileCountMap[keyA] || 0;
-        const countB = tileCountMap[keyB] || 0;
-
-        /**
-         * More duplicates first
-         */
-        if (countA !== countB) {
-          return countB - countA;
+      /**
+       * =====================================
+       * 2. KONG (4 same)
+       * =====================================
+       */
+      for (const key in map) {
+        if (map[key].length >= 4) {
+          result.push(...map[key].slice(0, 4));
+          used.add(key);
         }
+      }
 
-        /**
-         * bamboo first, then dot
-         */
-        const typeA = typeOrder[a.type] || 999;
-        const typeB = typeOrder[b.type] || 999;
+      /**
+       * =====================================
+       * 3. PONG (3 same)
+       * =====================================
+       */
+      for (const key in map) {
+        if (used.has(key)) continue;
 
-        if (typeA !== typeB) {
-          return typeA - typeB;
+        if (map[key].length >= 3) {
+          result.push(...map[key].slice(0, 3));
+          used.add(key);
         }
+      }
 
-        /**
-         * Number ascending
-         */
-        if (a.number !== b.number) {
-          return a.number - b.number;
-        }
-
-        return (a.copy_no || 0) - (b.copy_no || 0);
+      /**
+       * =====================================
+       * 4. CHOW (sequence)
+       * =====================================
+       */
+      const remainingTiles = tiles.filter((t) => {
+        const key = `${t.type}_${t.number}`;
+        return !used.has(key);
       });
+
+      const sortedRemaining = remainingTiles.sort((a, b) => {
+        if (a.type !== b.type) {
+          return typeOrder[a.type] - typeOrder[b.type];
+        }
+        return a.number - b.number;
+      });
+
+      const visited = new Array(sortedRemaining.length).fill(false);
+
+      for (let i = 0; i < sortedRemaining.length; i++) {
+        if (visited[i]) continue;
+
+        const a = sortedRemaining[i];
+        const b = sortedRemaining[i + 1];
+        const c = sortedRemaining[i + 2];
+
+        if (
+          b &&
+          c &&
+          a.type === b.type &&
+          a.type === c.type &&
+          a.number + 1 === b.number &&
+          a.number + 2 === c.number
+        ) {
+          result.push(a, b, c);
+          visited[i] = visited[i + 1] = visited[i + 2] = true;
+        }
+      }
+
+      /**
+       * =====================================
+       * 5. LEFTOVER (pairs/singles)
+       * =====================================
+       */
+      for (let i = 0; i < sortedRemaining.length; i++) {
+        if (!visited[i]) {
+          result.push(sortedRemaining[i]);
+        }
+      }
+
+      return result;
     };
 
     for (const targetPlayer of players) {
       /**
-       * Hand tiles
+       * =====================================
+       * Get hand tiles
+       * =====================================
        */
       const rawTiles = await redis.lrange(
         HAND_KEY(roomId, targetPlayer.userId),
@@ -4685,32 +4802,59 @@ export default class MahJongRoomManager {
         -1,
       );
 
-      const parsedTiles = rawTiles.map((tile) => JSON.parse(tile));
+      const parsedTiles = rawTiles.map(JSON.parse);
 
       /**
-       * Get chow / pong / kong from redis
+       * =====================================
+       * Get melds (FIXED: use LRANGE, not GET)
+       * =====================================
        */
-      const rawChow = await redis.get(CHOW_KEY(roomId, targetPlayer.userId));
+      const rawChow = await redis.lrange(
+        CHOW_KEY(roomId, targetPlayer.userId),
+        0,
+        -1,
+      );
 
-      const rawPong = await redis.get(PONG_KEY(roomId, targetPlayer.userId));
+      const rawPong = await redis.lrange(
+        PONG_KEY(roomId, targetPlayer.userId),
+        0,
+        -1,
+      );
 
-      const rawKong = await redis.get(KONG_KEY(roomId, targetPlayer.userId));
+      const rawKong = await redis.lrange(
+        KONG_KEY(roomId, targetPlayer.userId),
+        0,
+        -1,
+      );
 
-      const chow = rawChow ? JSON.parse(rawChow) : [];
-      const pong = rawPong ? JSON.parse(rawPong) : [];
-      const kong = rawKong ? JSON.parse(rawKong) : [];
+      const chow = rawChow.map(JSON.parse);
+      const pong = rawPong.map(JSON.parse);
+      const kong = rawKong.map(JSON.parse);
 
       /**
-       * Self hand → real tiles
+       * =====================================
+       * Self vs others view
+       * =====================================
        */
-      if (targetPlayer.userId === userId) {
+      const isSelf = Number(targetPlayer.userId) === Number(userId);
+
+      if (isSelf) {
         const sortedTiles = smartSortTiles(parsedTiles);
+        // console.log("SORT_TILES", sortedTiles);
+        await redis.del(HAND_KEY(roomId, targetPlayer.userId));
+
+        for (const tile of sortedTiles) {
+          await redis.rpush(
+            HAND_KEY(roomId, targetPlayer.userId),
+            JSON.stringify(tile),
+          );
+        }
 
         handState.push({
-          last_discard_tile: null,
-          chow, // from redis
-          pong, // from redis
-          kong, // from redis
+          last_discard_tile: discard_tile,
+          chow,
+          pong,
+          kong,
           userId: targetPlayer.userId,
           user_name: targetPlayer.name,
           isSelf: true,
@@ -4719,15 +4863,11 @@ export default class MahJongRoomManager {
           tiles: sortedTiles,
         });
       } else {
-        /**
-         * Other players → hidden hand only
-         * but chow / pong / kong should still be visible
-         */
         handState.push({
-          last_discard_tile: null,
-          chow, // from redis
-          pong, // from redis
-          kong, // from redis
+          last_discard_tile: discard_tile,
+          chow,
+          pong,
+          kong,
           userId: targetPlayer.userId,
           user_name: targetPlayer.name,
           isSelf: false,
@@ -4744,7 +4884,7 @@ export default class MahJongRoomManager {
     }
 
     /**
-     * Save private player view
+     * Save private view
      */
     await redis.set(
       PLAYER_VIEW_HAND_KEY(roomId, userId),
@@ -4752,7 +4892,7 @@ export default class MahJongRoomManager {
     );
 
     /**
-     * Emit only to that player
+     * Emit to player
      */
     io.to(`user:${userId}`).emit("mahjong:initial_hand_state", handState);
   }

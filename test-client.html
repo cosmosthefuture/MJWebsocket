@@ -45,6 +45,10 @@
 
     <label>Room ID:</label><br />
     <input id="roomIdInput" placeholder="Enter Room ID" />
+    <input id="kongKeyInput" placeholder="Enter Kong Key" />
+    <input id="pongKeyInput" placeholder="Enter Pong Key" />
+    <input id="chowKeyInput" placeholder="Enter Chow Key" />
+    <input id="discardTileIdInput" placeholder="Enter Discard Tile ID" />
 
     <br /><br />
 
@@ -55,10 +59,29 @@
 
     <button onclick="joinRoom()">Join Room</button>
     <button onclick="leaveRoom()">Leave Room</button>
+    <button onclick="sortHand()">Sort Hand</button>
+    <button onclick="acceptKong()">Accept Kong</button>
+    <button onclick="passKong()">Pass Kong</button>
+
+    <button onclick="acceptInterruptKong()">Accept Interrupt Kong</button>
+    <button onclick="acceptInterruptPong()">Accept Interrupt Pong</button>
+
+    <button onclick="discardTile()">Discard Tile</button>
+
+    <br /><br />
+    <button onclick="acceptNormalKong()">Accept Normal Kong</button>
+    <button onclick="passNormalKong()">Pass Normal Kong</button>
+
+    <button onclick="acceptNormalPong()">Accept Normal Pong</button>
+    <button onclick="passNormalPong()">Pass Normal Pong</button>
+
+    <button onclick="acceptNormalChow()">Accept Normal Chow</button>
+    <button onclick="passNormalChow()">Pass Normal Chow</button>
 
     <div class="section">
       <h3 id="statusDisplay">Status: -</h3>
       <h3 id="countdownDisplay">Countdown: -</h3>
+      <h3 id="turnDisplay">Turn: -</h3>
     </div>
 
     <div class="section">
@@ -95,7 +118,8 @@
       let socket;
       let wsToken = null;
       let sanctumToken = null;
-
+      let user_id = null;
+      let kongData = null;
       const API_URL = "http://localhost:8000/api";
 
       let currentState = {
@@ -145,10 +169,21 @@
           "Countdown: " + value + "s";
       }
 
+      function updateTurn(userId, remaining) {
+        const el = document.getElementById("turnDisplay");
+
+        if (!userId) {
+          el.textContent = "Turn: -";
+          return;
+        }
+
+        el.textContent = `Turn: ${userId} | ${remaining}s`;
+      }
+
       function renderState(state) {
         console.log("STATE:", state);
 
-        // 🔥 keep your original merge behavior
+        // keep original merge behavior
         currentState = {
           ...currentState,
           ...state,
@@ -162,9 +197,15 @@
           countdownRemaining,
           dice,
           firstPlayer,
+          handState = [],
+          wallCount = null,
+          currentTurnUserId,
+          turnRemaining,
         } = currentState;
 
+        // ================= BASIC STATE =================
         updateStatus(status);
+        updateTurn(currentTurnUserId, turnRemaining);
 
         if (countdownRemaining !== null) {
           updateCountdown(countdownRemaining);
@@ -176,18 +217,39 @@
         renderRoundPlayers(roundPlayers);
         renderGuests(guests);
 
-        // ===== ✅ NEW: DICE =====
+        // ================= DICE =================
         if (dice) {
           updateDice([dice.d1, dice.d2], dice.total);
         }
 
-        // ===== ✅ NEW: FIRST PLAYER =====
+        // ================= FIRST PLAYER =================
         if (firstPlayer) {
           updateFirstPlayer(firstPlayer.user_id, firstPlayer.user_name);
         }
 
+        // ================= HAND STATE =================
+        if (handState && handState.length) {
+          const myPlayer = handState.find((player) => player.isSelf === true);
+          const otherPlayers = handState.filter(
+            (player) => player.isSelf === false,
+          );
+
+          renderMyHandTiles(myPlayer ? myPlayer.tiles : []);
+          renderOtherPlayersTiles(otherPlayers);
+        } else {
+          renderMyHandTiles([]);
+          renderOtherPlayersTiles([]);
+        }
+
+        // ================= WALL COUNT =================
+        if (wallCount !== null) {
+          log("🧱 Wall Count: " + wallCount);
+          console.log("Wall Count:", wallCount);
+        }
+
         log("📦 State updated");
       }
+
       function updateDice(dice, total) {
         document.getElementById("diceDisplay").textContent =
           `Dice: ${dice[0]} + ${dice[1]} = ${total}`;
@@ -237,17 +299,17 @@
         el.innerHTML = tiles
           .map(
             (tile) => `
-        <span style="
-          display:inline-block;
-          border:1px solid #ccc;
-          padding:8px;
-          margin:4px;
-          border-radius:6px;
-          background:#fff;
-        ">
-          ${tileLabel(tile)}
-        </span>
-      `,
+              <span style="
+                display:inline-block;
+                border:1px solid #ccc;
+                padding:8px;
+                margin:4px;
+                border-radius:6px;
+                background:#fff;
+              ">
+                ${tileLabel(tile)}
+              </span>
+            `,
           )
           .join("");
       }
@@ -263,26 +325,26 @@
         el.innerHTML = players
           .map(
             (player) => `
-        <div style="margin-bottom:16px;">
-          <strong>${player.userId || player.name}</strong><br/>
-          ${player.tiles
-            .map(
-              (tile) => `
-                <span style="
-                  display:inline-block;
-                  border:1px solid #ccc;
-                  padding:8px;
-                  margin:4px;
-                  border-radius:6px;
-                  background:#f5f5f5;
-                ">
-                  ${tileLabel(tile)}
-                </span>
-              `,
-            )
-            .join("")}
-        </div>
-      `,
+              <div style="margin-bottom:16px;">
+                <strong>${player.userId || player.name}</strong><br/>
+                ${player.tiles
+                  .map(
+                    (tile) => `
+                      <span style="
+                        display:inline-block;
+                        border:1px solid #ccc;
+                        padding:8px;
+                        margin:4px;
+                        border-radius:6px;
+                        background:#f5f5f5;
+                      ">
+                        ${tileLabel(tile)}
+                      </span>
+                    `,
+                  )
+                  .join("")}
+              </div>
+            `,
           )
           .join("");
       }
@@ -297,6 +359,7 @@
         });
 
         const data = await res.json();
+        user_id = data.data.user_id;
         return data.data.ws_token;
       }
 
@@ -480,10 +543,7 @@
                 ")",
             );
 
-            updateFirstPlayer(
-              data.user_id,
-              data.user_name,
-            );
+            updateFirstPlayer(data.user_id, data.user_name);
           });
 
           socket.on("mahjong:start_shuffling", (data) => {
@@ -494,9 +554,14 @@
             log("Dealing Tiles");
           });
 
+          socket.on("mahjong:wall_count_updated", (data) => {
+            log("Wall Count Updated: " + data.wallCount);
+            console.log("wall count ", data.wallCount);
+          });
+
           socket.on("mahjong:initial_hand_state", (data) => {
             log("🀄 Initial Hand State Received");
-            console.log(data);
+            console.log("HAND STATE:: ", data);
 
             const myPlayer = data.find((player) => player.isSelf === true);
             const otherPlayers = data.filter(
@@ -505,6 +570,100 @@
 
             renderMyHandTiles(myPlayer ? myPlayer.tiles : []);
             renderOtherPlayersTiles(otherPlayers);
+          });
+
+          socket.on("mahjong:sorted_hand_state", (data) => {
+            log("🀄 Sorted Hand State Received");
+            console.log("Sorted Hand", data);
+
+            const myPlayer = data.find((player) => player.isSelf === true);
+            const otherPlayers = data.filter(
+              (player) => player.isSelf === false,
+            );
+
+            renderMyHandTiles(myPlayer ? myPlayer.tiles : []);
+            renderOtherPlayersTiles(otherPlayers);
+          });
+
+          socket.on("mahjong:turn_countdown_started", (data) => {
+            log("⏳ Turn countdown started");
+
+            currentState.currentTurnUserId = data.user_id;
+            currentState.turnRemaining = data.duration;
+
+            updateTurn(data.user_id, data.duration);
+          });
+
+          socket.on("mahjong:turn_countdown", (data) => {
+            currentState.turnRemaining = data.remaining;
+
+            // updateCountdown(data.remaining);
+            updateTurn(data.user_id, data.remaining);
+          });
+
+          socket.on("mahjong:turn_countdown_finished", (data) => {
+            log("⛔ Turn finished: " + data.user_id);
+
+            currentState.turnRemaining = 0;
+
+            updateCountdown("-");
+            updateTurn(null, null);
+          });
+
+          socket.on("mahjong:can_kong", (data) => {
+            log("⛔ Can Kong");
+            console.log("Can Kong: ", data);
+          });
+
+          socket.on("mahjong:can_interrupt_kong", (data) => {
+            log("⛔ Can Interupt Kong");
+            console.log("Can Interupt Kong: ", data);
+          });
+
+          socket.on("mahjong:can_interrupt_pong", (data) => {
+            log("⛔ Can Interupt Pong");
+            console.log("Can Interupt Pong: ", data);
+          });
+
+          socket.on("mahjong:can_normal_kong", (data) => {
+            log("⛔ Can Normal Kong");
+            console.log("Can Normal Kong: ", data);
+          });
+
+          socket.on("mahjong:can_normal_pong", (data) => {
+            log("⛔ Can Normal Pong");
+            console.log("Can Normal Pong: ", data);
+          });
+
+          socket.on("mahjong:can_normal_chow", (data) => {
+            log("⛔ Can Normal Chow");
+            console.log("Can Normal Chow: ", data);
+          });
+
+          socket.on("mahjong:remove_kong_decision", (data) => {
+            log("Remove Kong Decision");
+          });
+
+          socket.on("mahjong:remove_pong_decision", (data) => {
+            log("Remove Pong Decision");
+          });
+
+          socket.on("mahjong:you_win", (data) => {
+            log("YOU WIN");
+          });
+
+          socket.on("mahjong:draw_round", (data) => {
+            log("THIS ROUND IS DRAW. NO WINNER");
+          });
+
+          socket.on("mahjong:winner_reveal", (data) => {
+            log("Winner Reveal");
+            console.log("Winner Reveal: ", data);
+          });
+
+          socket.on("mahjong:cannot_discard", (data) => {
+            log("Unable to discard");
+            console.log("Unable to discard: ", data.message);
           });
 
           socket.on("mahjong:round_end", (data) => {
@@ -560,6 +719,129 @@
 
         socket.emit("mahjong:leave_room");
         log("➡️ Leaving room");
+      }
+
+      function sortHand() {
+        if (!socket || !socket.connected) {
+          log("⚠️ Not connected");
+          return;
+        }
+
+        const roomId = document.getElementById("roomIdInput").value;
+
+        if (!roomId) {
+          log("⚠️ Enter Room ID");
+          return;
+        }
+
+        socket.emit("mahjong:sort_hand", {
+          roomId,
+          userId: user_id,
+        });
+
+        log("➡️ Sort Hand Requested");
+      }
+
+      function acceptKong() {
+        const kongKey = document.getElementById("kongKeyInput").value;
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:accept_kong", {
+          roomId,
+          userId: user_id,
+          kongKey,
+        });
+      }
+
+      function passKong() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:pass_kong", {
+          roomId,
+          userId: user_id,
+        });
+      }
+
+      function acceptInterruptKong() {
+        const kongKey = document.getElementById("kongKeyInput").value;
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:accept_interrupt_kong", {
+          roomId,
+          userId: user_id,
+          kongKey,
+        });
+      }
+
+      function acceptInterruptPong() {
+        const pongKey = document.getElementById("pongKeyInput").value;
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:accept_interrupt_pong", {
+          roomId,
+          userId: user_id,
+          pongKey,
+        });
+      }
+
+      function acceptNormalKong() {
+        const kongKey = document.getElementById("kongKeyInput").value;
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:accept_normal_kong", {
+          roomId,
+          userId: user_id,
+          kongKey,
+        });
+      }
+
+      function passNormalKong() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:pass_normal_kong", {
+          roomId,
+          userId: user_id,
+        });
+      }
+
+      function acceptNormalPong() {
+        const pongKey = document.getElementById("pongKeyInput").value;
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:accept_normal_pong", {
+          roomId,
+          userId: user_id,
+          pongKey,
+        });
+      }
+
+      function passNormalPong() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:pass_normal_pong", {
+          roomId,
+          userId: user_id,
+        });
+      }
+
+      function acceptNormalChow() {
+        const chowKey = document.getElementById("chowKeyInput").value;
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:accept_normal_chow", {
+          roomId,
+          userId: user_id,
+          chowKey,
+        });
+      }
+
+      function passNormalChow() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:pass_normal_chow", {
+          roomId,
+          userId: user_id,
+        });
+      }
+
+      function discardTile() {
+        const tileId = document.getElementById("discardTileIdInput").value;
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:discard_tile", {
+          roomId,
+          userId: user_id,
+          tileId,
+        });
       }
 
       // ================= PING =================

@@ -2536,7 +2536,7 @@ export default class MahJongRoomManager {
 
       if (tileA && tileB) {
         chowGroups.push({
-          chowKey: `${type}_${a}_${n}_${b}`,
+          tileKey: `${type}_${a}_${n}_${b}`,
           tiles: [
             tileA,
             {

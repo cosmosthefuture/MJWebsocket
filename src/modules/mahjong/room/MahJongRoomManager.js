@@ -31,6 +31,9 @@ const HAND_KEY = (roomId, userId) => `room:${roomId}:round:hand:${userId}`;
 
 const DISCARD_KEY = (roomId) => `room:${roomId}:round:discards`;
 
+const PLAYER_DISCARD_TILES_KEY = (roomId, userId) =>
+  `room:${roomId}:round:discard_tiles:${userId}`;
+
 const LAST_DISCARD_KEY = (roomId) => `room:${roomId}:round:last_discard`;
 
 const DISCARD_REACTION_KEY = (roomId) =>
@@ -444,7 +447,7 @@ export default class MahJongRoomManager {
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "dice_rolling");
     io.to(SOCKET_ROOM(roomId)).emit("mahjong:start_rolling_dice");
 
-    await this.wait(10000);
+    await this.wait(7000);
 
     const sorted = [...roundPlayers].sort(
       (a, b) => a.seat_position - b.seat_position,
@@ -461,7 +464,7 @@ export default class MahJongRoomManager {
       total,
     });
 
-    await this.wait(5000);
+    await this.wait(3000);
 
     const index = (total - 1) % sorted.length;
     const user_to_play_first = sorted[index];
@@ -595,6 +598,7 @@ export default class MahJongRoomManager {
             pong: null,
             chow: null,
             kong: null,
+            discarded_tiles: null,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -611,6 +615,7 @@ export default class MahJongRoomManager {
             pong: null,
             chow: null,
             kong: null,
+            discarded_tiles: null,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -996,6 +1001,13 @@ export default class MahJongRoomManager {
         const pongData = rawPong.map((item) => JSON.parse(item));
         const chowData = rawChow.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
         /**
          * Self → real tiles
          */
@@ -1005,6 +1017,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -1021,6 +1034,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -1235,12 +1249,21 @@ export default class MahJongRoomManager {
         const pongData = rawPong.map((item) => JSON.parse(item));
         const chowData = rawChow.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
             last_discard_tile: null,
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -1254,6 +1277,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -1518,12 +1542,21 @@ export default class MahJongRoomManager {
         const pongData = rawPong.map((item) => JSON.parse(item));
         const chowData = rawChow.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
             last_discard_tile: null,
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -1537,6 +1570,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -1806,6 +1840,14 @@ export default class MahJongRoomManager {
         const pongData = rawKong.map((item) => JSON.parse(item));
         const chowData = rawKong.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
         /**
          * Self → real tiles
          */
@@ -1815,6 +1857,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -1831,6 +1874,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -2724,12 +2768,21 @@ export default class MahJongRoomManager {
         const pongData = rawPong.map((item) => JSON.parse(item));
         const chowData = rawChow.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
             last_discard_tile: null,
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -2743,6 +2796,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -2901,12 +2955,21 @@ export default class MahJongRoomManager {
         const pongData = rawPong.map((item) => JSON.parse(item));
         const chowData = rawChow.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
             last_discard_tile: null,
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -2920,6 +2983,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -2986,7 +3050,7 @@ export default class MahJongRoomManager {
     }
 
     const selectedGroup = chowData.groups.find(
-      (group) => group.chowKey === chowKey,
+      (group) => group.tileKey === chowKey,
     );
 
     if (!selectedGroup) {
@@ -3117,12 +3181,21 @@ export default class MahJongRoomManager {
 
         const chowStoredData = rawChow.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
             last_discard_tile: null,
             pong: pongData,
             chow: chowStoredData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -3136,6 +3209,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowStoredData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -3184,6 +3258,7 @@ export default class MahJongRoomManager {
     const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
     const discardTileData = JSON.parse(discardTileRaw);
     const discardTile = discardTileData.tile;
+    const discardedUserId = discardTileData.discard_by;
 
     const pongData = await MahJongRoomManager.checkPongUsingDiscard(
       roomId,
@@ -3209,6 +3284,11 @@ export default class MahJongRoomManager {
         });
       } else {
         await redis.del(LAST_DISCARD_KEY(roomId));
+        await redis.rpush(
+          PLAYER_DISCARD_TILES_KEY(roomId, discardedUserId),
+          JSON.stringify(discardTile),
+        );
+
         const drawTile = await redis.lpop(WALL_KEY(roomId));
 
         const wallCount = await redis.llen(WALL_KEY(roomId));
@@ -3258,12 +3338,21 @@ export default class MahJongRoomManager {
             const pongData = rawPong.map((item) => JSON.parse(item));
             const chowData = rawChow.map((item) => JSON.parse(item));
 
+            const ownDiscardTilesRaw = await redis.lrange(
+              PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+              0,
+              -1,
+            );
+
+            const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
             if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
               handState.push({
                 last_discard_tile: null,
                 pong: pongData,
                 chow: chowData,
                 kong: kongData,
+                discarded_tiles: ownDiscardTiles,
                 userId: targetPlayer.userId,
                 user_name: targetPlayer.name,
                 isSelf: true,
@@ -3277,6 +3366,7 @@ export default class MahJongRoomManager {
                 pong: pongData,
                 chow: chowData,
                 kong: kongData,
+                discarded_tiles: ownDiscardTiles,
                 userId: targetPlayer.userId,
                 user_name: targetPlayer.name,
                 isSelf: false,
@@ -3327,6 +3417,7 @@ export default class MahJongRoomManager {
     const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
     const discardTileData = JSON.parse(discardTileRaw);
     const discardTile = discardTileData.tile;
+    const discardedUserId = discardTileData.discard_by;
 
     const chowData = await MahJongRoomManager.checkChowUsingDiscard(
       roomId,
@@ -3341,6 +3432,11 @@ export default class MahJongRoomManager {
       });
     } else {
       await redis.del(LAST_DISCARD_KEY(roomId));
+      await redis.rpush(
+        PLAYER_DISCARD_TILES_KEY(roomId, discardedUserId),
+        JSON.stringify(discardTile),
+      );
+
       const drawTile = await redis.lpop(WALL_KEY(roomId));
 
       const wallCount = await redis.llen(WALL_KEY(roomId));
@@ -3390,12 +3486,21 @@ export default class MahJongRoomManager {
           const pongData = rawPong.map((item) => JSON.parse(item));
           const chowData = rawChow.map((item) => JSON.parse(item));
 
+          const ownDiscardTilesRaw = await redis.lrange(
+            PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+            0,
+            -1,
+          );
+
+          const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
           if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
             handState.push({
               last_discard_tile: null,
               pong: pongData,
               chow: chowData,
               kong: kongData,
+              discarded_tiles: ownDiscardTiles,
               userId: targetPlayer.userId,
               user_name: targetPlayer.name,
               isSelf: true,
@@ -3409,6 +3514,7 @@ export default class MahJongRoomManager {
               pong: pongData,
               chow: chowData,
               kong: kongData,
+              discarded_tiles: ownDiscardTiles,
               userId: targetPlayer.userId,
               user_name: targetPlayer.name,
               isSelf: false,
@@ -3455,7 +3561,17 @@ export default class MahJongRoomManager {
   static async passNormalChow(socket, payload, io) {
     const { roomId, userId } = payload;
 
+    const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
+    const discardTileData = JSON.parse(discardTileRaw);
+    const discardTile = discardTileData.tile;
+    const discardedUserId = discardTileData.discard_by;
+
     await redis.del(LAST_DISCARD_KEY(roomId));
+    await redis.rpush(
+      PLAYER_DISCARD_TILES_KEY(roomId, discardedUserId),
+      JSON.stringify(discardTile),
+    );
+
     const drawTile = await redis.lpop(WALL_KEY(roomId));
     const wallCount = await redis.llen(WALL_KEY(roomId));
 
@@ -3503,12 +3619,21 @@ export default class MahJongRoomManager {
         const pongData = rawPong.map((item) => JSON.parse(item));
         const chowData = rawChow.map((item) => JSON.parse(item));
 
+        const ownDiscardTilesRaw = await redis.lrange(
+          PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+          0,
+          -1,
+        );
+
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
             last_discard_tile: null,
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: true,
@@ -3522,6 +3647,7 @@ export default class MahJongRoomManager {
             pong: pongData,
             chow: chowData,
             kong: kongData,
+            discarded_tiles: ownDiscardTiles,
             userId: targetPlayer.userId,
             user_name: targetPlayer.name,
             isSelf: false,
@@ -3633,6 +3759,7 @@ export default class MahJongRoomManager {
     const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
     const discardTileData = JSON.parse(discardTileRaw);
     const discardTile = discardTileData.tile;
+    const discardedUserId = discardTileData.discard_by;
 
     // temporary codes
     // const testTiles = [
@@ -3785,6 +3912,12 @@ export default class MahJongRoomManager {
       }
       await MahJongRoomManager.wait(1200);
       await redis.del(LAST_DISCARD_KEY(roomId));
+
+      await redis.rpush(
+        PLAYER_DISCARD_TILES_KEY(roomId, discardedUserId),
+        JSON.stringify(discardTile),
+      );
+
       drawTile = await redis.lpop(WALL_KEY(roomId));
 
       wallCount = await redis.llen(WALL_KEY(roomId));
@@ -3834,12 +3967,21 @@ export default class MahJongRoomManager {
           const pongData = rawPong.map((item) => JSON.parse(item));
           const chowData = rawChow.map((item) => JSON.parse(item));
 
+          const ownDiscardTilesRaw = await redis.lrange(
+            PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+            0,
+            -1,
+          );
+
+          const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
           if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
             handState.push({
               last_discard_tile: null,
               pong: pongData,
               chow: chowData,
               kong: kongData,
+              discarded_tiles: ownDiscardTiles,
               userId: targetPlayer.userId,
               user_name: targetPlayer.name,
               isSelf: true,
@@ -3853,6 +3995,7 @@ export default class MahJongRoomManager {
               pong: pongData,
               chow: chowData,
               kong: kongData,
+              discarded_tiles: ownDiscardTiles,
               userId: targetPlayer.userId,
               user_name: targetPlayer.name,
               isSelf: false,
@@ -3995,6 +4138,16 @@ export default class MahJongRoomManager {
               return;
             }
 
+            await redis.del(LAST_DISCARD_KEY(roomId));
+
+            await redis.rpush(
+              PLAYER_DISCARD_TILES_KEY(
+                roomId,
+                current_last_discard_tile.discard_by,
+              ),
+              JSON.stringify(current_last_discard_tile.tile),
+            );
+
             drawTile = await redis.lpop(WALL_KEY(roomId));
             // console.log("DRAW TILE", drawTile);
 
@@ -4049,6 +4202,14 @@ export default class MahJongRoomManager {
                 const pongData = rawPong.map((item) => JSON.parse(item));
                 const chowData = rawChow.map((item) => JSON.parse(item));
 
+                const ownDiscardTilesRaw = await redis.lrange(
+                  PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+                  0,
+                  -1,
+                );
+
+                const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
                 if (
                   Number(currentPlayer.userId) === Number(targetPlayer.userId)
                 ) {
@@ -4057,6 +4218,7 @@ export default class MahJongRoomManager {
                     pong: pongData,
                     chow: chowData,
                     kong: kongData,
+                    discarded_tiles: ownDiscardTiles,
                     userId: targetPlayer.userId,
                     user_name: targetPlayer.name,
                     isSelf: true,
@@ -4070,6 +4232,7 @@ export default class MahJongRoomManager {
                     pong: pongData,
                     chow: chowData,
                     kong: kongData,
+                    discarded_tiles: ownDiscardTiles,
                     userId: targetPlayer.userId,
                     user_name: targetPlayer.name,
                     isSelf: false,
@@ -4831,6 +4994,13 @@ export default class MahJongRoomManager {
       const pong = rawPong.map(JSON.parse);
       const kong = rawKong.map(JSON.parse);
 
+      const ownDiscardTilesRaw = await redis.lrange(
+        PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
+        0,
+        -1,
+      );
+
+      const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
       /**
        * =====================================
        * Self vs others view
@@ -4855,6 +5025,7 @@ export default class MahJongRoomManager {
           chow,
           pong,
           kong,
+          discarded_tiles: ownDiscardTiles,
           userId: targetPlayer.userId,
           user_name: targetPlayer.name,
           isSelf: true,
@@ -4868,6 +5039,7 @@ export default class MahJongRoomManager {
           chow,
           pong,
           kong,
+          discarded_tiles: ownDiscardTiles,
           userId: targetPlayer.userId,
           user_name: targetPlayer.name,
           isSelf: false,

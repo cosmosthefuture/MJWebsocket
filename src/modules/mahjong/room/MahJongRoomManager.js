@@ -447,7 +447,7 @@ export default class MahJongRoomManager {
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "dice_rolling");
     io.to(SOCKET_ROOM(roomId)).emit("mahjong:start_rolling_dice");
 
-    await this.wait(7000);
+    await this.wait(5000);
 
     const sorted = [...roundPlayers].sort(
       (a, b) => a.seat_position - b.seat_position,
@@ -464,7 +464,7 @@ export default class MahJongRoomManager {
       total,
     });
 
-    await this.wait(3000);
+    await this.wait(2000);
 
     const index = (total - 1) % sorted.length;
     const user_to_play_first = sorted[index];
@@ -1837,8 +1837,8 @@ export default class MahJongRoomManager {
         );
 
         const kongData = rawKong.map((item) => JSON.parse(item));
-        const pongData = rawKong.map((item) => JSON.parse(item));
-        const chowData = rawKong.map((item) => JSON.parse(item));
+        const pongData = rawPong.map((item) => JSON.parse(item));
+        const chowData = rawChow.map((item) => JSON.parse(item));
 
         const ownDiscardTilesRaw = await redis.lrange(
           PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId),
@@ -1905,6 +1905,7 @@ export default class MahJongRoomManager {
         "mahjong:initial_hand_state",
         handState,
       );
+      // console.log("HS IN DISCARD FUNC", handState);
     }
 
     await MahJongRoomManager.handleAfterDiscard(
@@ -2321,6 +2322,138 @@ export default class MahJongRoomManager {
   }
 
   static async checkWinUsingDiscard(roomId, userId, discardTile) {
+    // // temporary codes. delete later
+    // await redis.del(HAND_KEY(roomId, userId));
+
+    // const testTiles = [
+    //   // ===== KONG (4 same tiles) =====
+    //   {
+    //     id: 9991,
+    //     type: discardTile.type,
+    //     number: discardTile.number,
+    //     copy_no: 1,
+    //   },
+    //   {
+    //     id: 9992,
+    //     type: discardTile.type,
+    //     number: discardTile.number,
+    //     copy_no: 2,
+    //   },
+    //   // {
+    //   //   id: 9993,
+    //   //   type: discardTile.type,
+    //   //   number: discardTile.number,
+    //   //   copy_no: 3,
+    //   // },
+    //   {
+    //     id: 9994,
+    //     type: "bamboo",
+    //     number: 9,
+    //     copy_no: 3,
+    //   },
+
+    //   // ===== OTHER 10 TILES =====
+    //   {
+    //     id: 9995,
+    //     type: "dot",
+    //     number: 1,
+    //     copy_no: 1,
+    //   },
+    //   {
+    //     id: 9996,
+    //     type: "dot",
+    //     number: 2,
+    //     copy_no: 1,
+    //   },
+    //   {
+    //     id: 9997,
+    //     type: "dot",
+    //     number: 3,
+    //     copy_no: 1,
+    //   },
+
+    //   {
+    //     id: 9998,
+    //     type: "bamboo",
+    //     number: 5,
+    //     copy_no: 1,
+    //   },
+    //   {
+    //     id: 9999,
+    //     type: "bamboo",
+    //     number: 6,
+    //     copy_no: 1,
+    //   },
+    //   {
+    //     id: 10000,
+    //     type: "bamboo",
+    //     number: 7,
+    //     copy_no: 1,
+    //   },
+
+    //   {
+    //     id: 10001,
+    //     type: "dot",
+    //     number: 7,
+    //     copy_no: 1,
+    //   },
+    //   {
+    //     id: 10002,
+    //     type: "dot",
+    //     number: 7,
+    //     copy_no: 2,
+    //   },
+    //   {
+    //     id: 10003,
+    //     type: "dot",
+    //     number: 7,
+    //     copy_no: 3,
+    //   },
+
+    //   {
+    //     id: 10004,
+    //     type: "bamboo",
+    //     number: 9,
+    //     copy_no: 1,
+    //   },
+    // ];
+
+    // for (const tile of testTiles) {
+    //   await redis.rpush(HAND_KEY(roomId, userId), JSON.stringify(tile));
+    // }
+
+    // const playerViewRawTest = await redis.get(
+    //   PLAYER_VIEW_HAND_KEY(roomId, userId),
+    // );
+
+    // if (playerViewRawTest) {
+    //   const handState = JSON.parse(playerViewRawTest);
+
+    //   const updatedHandState = handState.map((player) => {
+    //     /**
+    //      * update self player only
+    //      */
+    //     if (Number(player.userId) === Number(userId)) {
+    //       return {
+    //         ...player,
+    //         tileCount: testTiles.length,
+    //         tiles: testTiles,
+    //       };
+    //     }
+
+    //     /**
+    //      * keep others unchanged
+    //      */
+    //     return player;
+    //   });
+
+    //   await redis.set(
+    //     PLAYER_VIEW_HAND_KEY(roomId, userId),
+    //     JSON.stringify(updatedHandState),
+    //   );
+    // }
+    // // temporary codes. delete later
+
     /**
      * =====================================
      * 1. Get player view hand state
@@ -4026,6 +4159,7 @@ export default class MahJongRoomManager {
         roomId,
         nextPlayer.userId,
       );
+      console.log("WH In NP: ", winning_hand_result);
       if (winning_hand_result.canWin) {
         io.to(`user:${nextPlayer.userId}`).emit("mahjong:you_win");
         await MahJongRoomManager.storeWinningData(roomId, nextPlayer.userId);
@@ -4540,77 +4674,62 @@ export default class MahJongRoomManager {
   }
 
   static canFormMeldsByCount(counts, meldsNeeded) {
+    // base case
     if (meldsNeeded === 0) {
       for (const key in counts) {
-        if (counts[key] > 0) {
-          return false;
-        }
+        if (counts[key] > 0) return false;
       }
-
       return true;
     }
 
-    /**
-     * Find first remaining tile
-     */
-    let firstKey = null;
-
+    // TRY ALL POSSIBLE START TILES (IMPORTANT FIX)
     for (const key in counts) {
-      if (counts[key] > 0) {
-        firstKey = key;
-        break;
-      }
-    }
+      if (counts[key] <= 0) continue;
 
-    if (!firstKey) {
-      return false;
-    }
+      const [type, numStr] = key.split("_");
+      const num = Number(numStr);
 
-    const [type, numStr] = firstKey.split("_");
-    const num = Number(numStr);
+      // -----------------------------
+      // TRY PONG
+      // -----------------------------
+      if (counts[key] >= 3) {
+        counts[key] -= 3;
 
-    /**
-     * =====================================
-     * Try Pong only (exactly 3)
-     * not >= 3
-     * =====================================
-     */
+        if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
+          counts[key] += 3;
+          return true;
+        }
 
-    if (counts[firstKey] === 3) {
-      counts[firstKey] -= 3;
-
-      if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
-        counts[firstKey] += 3;
-        return true;
+        counts[key] += 3;
       }
 
-      counts[firstKey] += 3;
-    }
+      // -----------------------------
+      // TRY CHOW
+      // -----------------------------
+      const key2 = `${type}_${num + 1}`;
+      const key3 = `${type}_${num + 2}`;
 
-    /**
-     * =====================================
-     * Try Chow
-     * =====================================
-     */
+      if (
+        type !== "wind" &&
+        type !== "dragon" && // safety if you have honors
+        counts[key2] > 0 &&
+        counts[key3] > 0
+      ) {
+        counts[key]--;
+        counts[key2]--;
+        counts[key3]--;
 
-    const key2 = `${type}_${num + 1}`;
-    const key3 = `${type}_${num + 2}`;
+        if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
+          counts[key]++;
+          counts[key2]++;
+          counts[key3]++;
+          return true;
+        }
 
-    if (num <= 7 && counts[key2] > 0 && counts[key3] > 0) {
-      counts[firstKey]--;
-      counts[key2]--;
-      counts[key3]--;
-
-      if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
-        counts[firstKey]++;
+        counts[key]++;
         counts[key2]++;
         counts[key3]++;
-        return true;
       }
-
-      counts[firstKey]++;
-      counts[key2]++;
-      counts[key3]++;
     }
 
     return false;

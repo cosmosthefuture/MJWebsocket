@@ -2543,36 +2543,49 @@ export default class MahJongRoomManager {
      * 5. Try every possible pair
      * =====================================
      */
-    for (const key in counts) {
-      if (counts[key] >= 2) {
-        /**
-         * Assume this is the pair
-         */
-        counts[key] -= 2;
+    // for (const key in counts) {
+    //   if (counts[key] >= 2) {
+    //     /**
+    //      * Assume this is the pair
+    //      */
+    //     counts[key] -= 2;
 
-        const canWin = this.canFormMeldsByCount(
-          { ...counts },
+    //     const canWin = this.canFormMeldsByCount(
+    //       { ...counts },
+    //       remainingMeldsNeeded,
+    //     );
+
+    //     if (canWin) {
+    //       counts[key] += 2;
+
+    //       return {
+    //         canWin: true,
+    //         winningPair: key,
+    //         discardTile,
+    //         revealedMeldCount,
+    //         remainingMeldsNeeded,
+    //       };
+    //     }
+
+    //     /**
+    //      * Restore
+    //      */
+    //     counts[key] += 2;
+    //   }
+    // }
+
+    const canWin = this.canWinWithMeldsAndPair(counts, remainingMeldsNeeded);
+
+    return canWin
+      ? {
+          canWin: true,
+          revealedMeldCount,
           remainingMeldsNeeded,
-        );
-
-        if (canWin) {
-          counts[key] += 2;
-
-          return {
-            canWin: true,
-            winningPair: key,
-            discardTile,
-            revealedMeldCount,
-            remainingMeldsNeeded,
-          };
         }
-
-        /**
-         * Restore
-         */
-        counts[key] += 2;
-      }
-    }
+      : {
+          canWin: false,
+          reason: "No valid winning structure",
+        };
 
     return {
       canWin: false,
@@ -4478,94 +4491,88 @@ export default class MahJongRoomManager {
     // await redis.del(HAND_KEY(roomId, userId));
 
     // const testTiles = [
-    //   // ===== KONG (4 same tiles) =====
     //   {
-    //     id: 9991,
-    //     type: "bamboo",
-    //     number: 3,
-    //     copy_no: 1,
-    //   },
-    //   {
-    //     id: 9992,
+    //     id: 46,
     //     type: "bamboo",
     //     number: 3,
     //     copy_no: 2,
     //   },
     //   {
-    //     id: 9993,
+    //     id: 47,
     //     type: "bamboo",
     //     number: 3,
     //     copy_no: 3,
     //   },
     //   {
-    //     id: 9994,
+    //     id: 48,
     //     type: "bamboo",
-    //     number: 9,
+    //     number: 3,
+    //     copy_no: 4,
+    //   },
+    //   {
+    //     id: 3,
+    //     type: "dot",
+    //     number: 5,
     //     copy_no: 3,
     //   },
-
-    //   // ===== OTHER 10 TILES =====
     //   {
-    //     id: 9995,
+    //     id: 4,
     //     type: "dot",
-    //     number: 1,
+    //     number: 5,
+    //     copy_no: 4,
+    //   },
+    //   {
+    //     id: 2,
+    //     type: "dot",
+    //     number: 5,
+    //     copy_no: 2,
+    //   },
+    //   {
+    //     id: 49,
+    //     type: "bamboo",
+    //     number: 4,
     //     copy_no: 1,
     //   },
     //   {
-    //     id: 9996,
+    //     id: 56,
+    //     type: "bamboo",
+    //     number: 5,
+    //     copy_no: 4,
+    //   },
+    //   {
+    //     id: 58,
+    //     type: "bamboo",
+    //     number: 6,
+    //     copy_no: 2,
+    //   },
+    //   {
+    //     id: 37,
     //     type: "dot",
     //     number: 2,
     //     copy_no: 1,
     //   },
     //   {
-    //     id: 9997,
+    //     id: 43,
     //     type: "dot",
-    //     number: 3,
-    //     copy_no: 1,
-    //   },
-
-    //   {
-    //     id: 9998,
-    //     type: "bamboo",
-    //     number: 5,
-    //     copy_no: 1,
-    //   },
-    //   {
-    //     id: 9999,
-    //     type: "bamboo",
-    //     number: 6,
-    //     copy_no: 1,
-    //   },
-    //   {
-    //     id: 10000,
-    //     type: "bamboo",
-    //     number: 7,
-    //     copy_no: 1,
-    //   },
-
-    //   {
-    //     id: 10001,
-    //     type: "dot",
-    //     number: 7,
-    //     copy_no: 1,
-    //   },
-    //   {
-    //     id: 10002,
-    //     type: "dot",
-    //     number: 7,
-    //     copy_no: 2,
-    //   },
-    //   {
-    //     id: 10003,
-    //     type: "dot",
-    //     number: 7,
+    //     number: 1,
     //     copy_no: 3,
     //   },
-
     //   {
-    //     id: 10004,
+    //     id: 68,
+    //     type: "bamboo",
+    //     number: 8,
+    //     copy_no: 4,
+    //   },
+    //   {
+    //     id: 71,
     //     type: "bamboo",
     //     number: 9,
+    //     copy_no: 3,
+    //   },
+    //   {
+    //     id: 61,
+    //     type: "bamboo",
+    //     number: 7,
     //     copy_no: 1,
     //   },
     // ];
@@ -4574,7 +4581,9 @@ export default class MahJongRoomManager {
     //   await redis.rpush(HAND_KEY(roomId, userId), JSON.stringify(tile));
     // }
 
-    // const playerViewRawTest = await redis.get(PLAYER_VIEW_HAND_KEY(roomId, userId));
+    // const playerViewRawTest = await redis.get(
+    //   PLAYER_VIEW_HAND_KEY(roomId, userId),
+    // );
 
     // if (playerViewRawTest) {
     //   const handState = JSON.parse(playerViewRawTest);
@@ -4649,91 +4658,225 @@ export default class MahJongRoomManager {
       counts[key] = (counts[key] || 0) + 1;
     }
 
-    for (const key in counts) {
+    // for (const key in counts) {
+    //   if (counts[key] >= 2) {
+    //     counts[key] -= 2;
+
+    //     if (this.canFormMeldsByCount({ ...counts }, remainingMeldsNeeded)) {
+    //       counts[key] += 2;
+
+    //       return {
+    //         canWin: true,
+    //         winningPair: key,
+    //         revealedMeldCount,
+    //         remainingMeldsNeeded,
+    //       };
+    //     }
+    //     counts[key] += 2;
+    //   }
+    // }
+
+    // return {
+    //   canWin: false,
+    //   reason: "No valid winning pattern",
+    // };
+
+    const canWin = this.canWinWithMeldsAndPair(counts, remainingMeldsNeeded);
+
+    return canWin
+      ? {
+          canWin: true,
+          revealedMeldCount,
+          remainingMeldsNeeded,
+        }
+      : {
+          canWin: false,
+          reason: "No valid winning structure",
+        };
+  }
+
+  static canWinWithMeldsAndPair(counts, meldsNeeded) {
+    const keys = Object.keys(counts).sort((a, b) => {
+      const [typeA, numA] = a.split("_");
+      const [typeB, numB] = b.split("_");
+
+      if (typeA !== typeB) return typeA.localeCompare(typeB);
+      return Number(numA) - Number(numB);
+    });
+
+    console.log("======== START PAIR CHECK ========");
+    console.log("Counts:", counts);
+    console.log("Melds Needed:", meldsNeeded);
+
+    for (const key of keys) {
       if (counts[key] >= 2) {
+        console.log(`\n🟣 TRY PAIR: ${key}`);
+
         counts[key] -= 2;
 
-        if (this.canFormMeldsByCount({ ...counts }, remainingMeldsNeeded)) {
+        if (this.canFormExactMelds({ ...counts }, meldsNeeded, 0)) {
+          console.log(`🟢 SUCCESS with pair: ${key}`);
           counts[key] += 2;
-
-          return {
-            canWin: true,
-            winningPair: key,
-            revealedMeldCount,
-            remainingMeldsNeeded,
-          };
+          return true;
         }
+
+        console.log(`🔴 FAIL with pair: ${key}`);
         counts[key] += 2;
       }
     }
 
-    return {
-      canWin: false,
-      reason: "No valid winning pattern",
-    };
-  }
-
-  static canFormMeldsByCount(counts, meldsNeeded) {
-    // base case
-    if (meldsNeeded === 0) {
-      for (const key in counts) {
-        if (counts[key] > 0) return false;
-      }
-      return true;
-    }
-
-    // TRY ALL POSSIBLE START TILES (IMPORTANT FIX)
-    for (const key in counts) {
-      if (counts[key] <= 0) continue;
-
-      const [type, numStr] = key.split("_");
-      const num = Number(numStr);
-
-      // -----------------------------
-      // TRY PONG
-      // -----------------------------
-      if (counts[key] >= 3) {
-        counts[key] -= 3;
-
-        if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
-          counts[key] += 3;
-          return true;
-        }
-
-        counts[key] += 3;
-      }
-
-      // -----------------------------
-      // TRY CHOW
-      // -----------------------------
-      const key2 = `${type}_${num + 1}`;
-      const key3 = `${type}_${num + 2}`;
-
-      if (
-        type !== "wind" &&
-        type !== "dragon" && // safety if you have honors
-        counts[key2] > 0 &&
-        counts[key3] > 0
-      ) {
-        counts[key]--;
-        counts[key2]--;
-        counts[key3]--;
-
-        if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
-          counts[key]++;
-          counts[key2]++;
-          counts[key3]++;
-          return true;
-        }
-
-        counts[key]++;
-        counts[key2]++;
-        counts[key3]++;
-      }
-    }
-
+    console.log("❌ NO VALID PAIR FOUND");
     return false;
   }
+
+  static canFormExactMelds(counts, meldsNeeded, depth = 0) {
+    const indent = "  ".repeat(depth);
+
+    const keys = Object.keys(counts).sort((a, b) => {
+      const [typeA, numA] = a.split("_");
+      const [typeB, numB] = b.split("_");
+
+      if (typeA !== typeB) return typeA.localeCompare(typeB);
+      return Number(numA) - Number(numB);
+    });
+
+    let firstKey = null;
+
+    for (const key of keys) {
+      if (counts[key] > 0) {
+        firstKey = key;
+        break;
+      }
+    }
+
+    console.log(`${indent}---`);
+    console.log(`${indent}Counts:`, counts);
+    console.log(`${indent}MeldsNeeded:`, meldsNeeded);
+
+    // ✅ base case
+    if (!firstKey) {
+      console.log(`${indent}✅ No tiles left. meldsNeeded=${meldsNeeded}`);
+      return meldsNeeded === 0;
+    }
+
+    if (meldsNeeded < 0) {
+      console.log(`${indent}❌ Melds exceeded`);
+      return false;
+    }
+
+    const [type, numStr] = firstKey.split("_");
+    const num = Number(numStr);
+
+    console.log(`${indent}👉 Trying tile: ${firstKey}`);
+
+    // -----------------------------
+    // TRY PONG
+    // -----------------------------
+    if (counts[firstKey] >= 3) {
+      console.log(`${indent}🟡 Try PONG: ${firstKey}`);
+
+      const next = { ...counts };
+      next[firstKey] -= 3;
+
+      if (this.canFormExactMelds(next, meldsNeeded - 1, depth + 1)) {
+        console.log(`${indent}✅ PONG success: ${firstKey}`);
+        return true;
+      }
+
+      console.log(`${indent}❌ PONG failed: ${firstKey}`);
+    }
+
+    // -----------------------------
+    // TRY CHOW
+    // -----------------------------
+    if (type !== "wind" && type !== "dragon") {
+      const k2 = `${type}_${num + 1}`;
+      const k3 = `${type}_${num + 2}`;
+
+      if (counts[k2] > 0 && counts[k3] > 0) {
+        console.log(`${indent}🟢 Try CHOW: ${firstKey}, ${k2}, ${k3}`);
+
+        const next = { ...counts };
+        next[firstKey]--;
+        next[k2]--;
+        next[k3]--;
+
+        if (this.canFormExactMelds(next, meldsNeeded - 1, depth + 1)) {
+          console.log(`${indent}✅ CHOW success: ${firstKey}`);
+          return true;
+        }
+
+        console.log(`${indent}❌ CHOW failed: ${firstKey}`);
+      } else {
+        console.log(`${indent}⚪ CHOW not possible: ${firstKey}`);
+      }
+    }
+
+    console.log(`${indent}🚫 Backtrack from: ${firstKey}`);
+    return false;
+  }
+
+  // static canFormMeldsByCount(counts, meldsNeeded) {
+  //   // base case
+  //   if (meldsNeeded === 0) {
+  //     for (const key in counts) {
+  //       if (counts[key] > 0) return false;
+  //     }
+  //     return true;
+  //   }
+
+  //   // TRY ALL POSSIBLE START TILES (IMPORTANT FIX)
+  //   for (const key in counts) {
+  //     if (counts[key] <= 0) continue;
+
+  //     const [type, numStr] = key.split("_");
+  //     const num = Number(numStr);
+
+  //     // -----------------------------
+  //     // TRY PONG
+  //     // -----------------------------
+  //     if (counts[key] >= 3) {
+  //       counts[key] -= 3;
+
+  //       if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
+  //         counts[key] += 3;
+  //         return true;
+  //       }
+
+  //       counts[key] += 3;
+  //     }
+
+  //     // -----------------------------
+  //     // TRY CHOW
+  //     // -----------------------------
+  //     const key2 = `${type}_${num + 1}`;
+  //     const key3 = `${type}_${num + 2}`;
+
+  //     if (
+  //       type !== "wind" &&
+  //       type !== "dragon" && // safety if you have honors
+  //       counts[key2] > 0 &&
+  //       counts[key3] > 0
+  //     ) {
+  //       counts[key]--;
+  //       counts[key2]--;
+  //       counts[key3]--;
+
+  //       if (this.canFormMeldsByCount(counts, meldsNeeded - 1)) {
+  //         counts[key]++;
+  //         counts[key2]++;
+  //         counts[key3]++;
+  //         return true;
+  //       }
+
+  //       counts[key]++;
+  //       counts[key2]++;
+  //       counts[key3]++;
+  //     }
+  //   }
+
+  //   return false;
+  // }
 
   static async checkKongExist(roomId, userId) {
     // temporary codes. delete later
@@ -5248,6 +5391,7 @@ export default class MahJongRoomManager {
         redis.del(CHOW_KEY(roomId, userId)),
         redis.del(PONG_KEY(roomId, userId)),
         redis.del(KONG_KEY(roomId, userId)),
+        redis.del(PLAYER_DISCARD_TILES_KEY(roomId, userId)),
       ]);
     }
 

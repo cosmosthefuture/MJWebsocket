@@ -5123,15 +5123,52 @@ export default class MahJongRoomManager {
       };
     }
 
+    const result = MahJongRoomManager.findWinningStructureForStoreWinningData(
+      selfPlayer.tiles,
+    );
+
+    if (!result.win) {
+      return {
+        success: false,
+        message: "Invalid winning hand",
+      };
+    }
+
+    const structure = MahJongRoomManager.buildFinalStructureForStoreWinningData(
+      selfPlayer.tiles,
+      result.pairKey,
+      result.melds,
+    );
+
+    const finalChow = [...(selfPlayer.chow || [])];
+    const finalPong = [...(selfPlayer.pong || [])];
+    const finalKong = [...(selfPlayer.kong || [])];
+
+    for (const m of structure.melds) {
+      if (m.type === "chow") {
+        finalChow.push({
+          chow_key: MahJongRoomManager.buildChowKeyForStoreWinningData(m.tiles),
+          tiles: m.tiles,
+        });
+      }
+
+      if (m.type === "pong") {
+        finalPong.push({
+          pong_key: MahJongRoomManager.buildPongKeyForStoreWinningData(m.tiles),
+          tiles: m.tiles,
+        });
+      }
+    }
+
     const winningData = {
       winner_user_id: selfPlayer.userId,
       winner_user_name: selfPlayer.user_name || null,
 
-      handTiles: selfPlayer.tiles || [],
+      pair: structure.pair,
 
-      chow: selfPlayer.chow || [],
-      pong: selfPlayer.pong || [],
-      kong: selfPlayer.kong || [],
+      chow: finalChow,
+      pong: finalPong,
+      kong: finalKong,
     };
 
     await redis.set(WINNING_DATA_KEY(roomId), JSON.stringify(winningData));
@@ -5141,6 +5178,201 @@ export default class MahJongRoomManager {
       message: "Winning data stored successfully",
       data: winningData,
     };
+  }
+
+  static buildCountMapForStoreWinningData(tiles) {
+    const map = {};
+
+    for (const t of tiles) {
+      const key = `${t.type}-${t.number}`;
+      map[key] = (map[key] || 0) + 1;
+    }
+
+    return map;
+  }
+
+  static cloneCountsForStoreWinningData(counts) {
+    return JSON.parse(JSON.stringify(counts));
+  }
+
+  /**
+   * =========================
+   * BACKTRACKING (RETURN STRUCTURE)
+   * =========================
+   */
+  static solveMeldsForStoreWinningData(counts, path = []) {
+    // 🔥 SORT KEYS FIRST
+    const keys = Object.keys(counts).sort((a, b) => {
+      const [typeA, numA] = a.split("-");
+      const [typeB, numB] = b.split("-");
+
+      if (typeA !== typeB) return typeA.localeCompare(typeB);
+      return Number(numA) - Number(numB);
+    });
+
+    for (const key of keys) {
+      const [type, numStr] = key.split("-");
+      const num = Number(numStr);
+
+      if (counts[key] === 0) continue;
+
+      // 🔹 Try PONG first
+      if (counts[key] >= 3) {
+        counts[key] -= 3;
+
+        const res = MahJongRoomManager.solveMeldsForStoreWinningData(counts, [...path, { type: "pong", key }]);
+
+        if (res) return res;
+
+        counts[key] += 3;
+      }
+
+      // 🔹 Try CHOW
+      const k1 = `${type}-${num}`;
+      const k2 = `${type}-${num + 1}`;
+      const k3 = `${type}-${num + 2}`;
+
+      if (
+        type !== "wind" &&
+        type !== "dragon" &&
+        counts[k1] > 0 &&
+        counts[k2] > 0 &&
+        counts[k3] > 0
+      ) {
+        counts[k1]--;
+        counts[k2]--;
+        counts[k3]--;
+
+        const res = MahJongRoomManager.solveMeldsForStoreWinningData(counts, [
+          ...path,
+          { type: "chow", key: `${type}-${num}` },
+        ]);
+
+        if (res) return res;
+
+        counts[k1]++;
+        counts[k2]++;
+        counts[k3]++;
+      }
+
+      // ❗ CRITICAL: stop here (backtracking)
+      return null;
+    }
+
+    return path;
+  }
+
+  /**
+   * =========================
+   * TRY ALL PAIRS
+   * =========================
+   */
+  static findWinningStructureForStoreWinningData(tiles) {
+    const counts = MahJongRoomManager.buildCountMapForStoreWinningData(tiles);
+
+    for (const pairKey in counts) {
+      if (counts[pairKey] < 2) continue;
+
+      const temp = MahJongRoomManager.cloneCountsForStoreWinningData(counts);
+
+      // remove pair
+      temp[pairKey] -= 2;
+
+      const melds = MahJongRoomManager.solveMeldsForStoreWinningData(
+        MahJongRoomManager.cloneCountsForStoreWinningData(temp),
+      );
+
+      if (melds) {
+        return {
+          win: true,
+          pairKey,
+          melds,
+        };
+      }
+    }
+
+    return { win: false };
+  }
+
+  /**
+   * =========================
+   * BUILD FINAL STRUCTURE (REAL TILES)
+   * =========================
+   */
+  static buildFinalStructureForStoreWinningData(tiles, pairKey, meldDefs) {
+    const tilesCopy = [...tiles];
+
+    // 🔹 Extract pair
+    const pair = [];
+    for (let i = 0; i < tilesCopy.length && pair.length < 2; i++) {
+      const t = tilesCopy[i];
+      if (`${t.type}-${t.number}` === pairKey) {
+        pair.push(t);
+        tilesCopy.splice(i, 1);
+        i--;
+      }
+    }
+
+    const melds = [];
+
+    for (const m of meldDefs) {
+      if (m.type === "pong") {
+        const group = [];
+
+        for (let i = 0; i < tilesCopy.length && group.length < 3; i++) {
+          const t = tilesCopy[i];
+          if (`${t.type}-${t.number}` === m.key) {
+            group.push(t);
+            tilesCopy.splice(i, 1);
+            i--;
+          }
+        }
+
+        melds.push({ type: "pong", tiles: group });
+      }
+
+      if (m.type === "chow") {
+        const [type, numStr] = m.key.split("-");
+        const num = Number(numStr);
+
+        const needed = [
+          `${type}-${num}`,
+          `${type}-${num + 1}`,
+          `${type}-${num + 2}`,
+        ];
+
+        const group = [];
+
+        for (const need of needed) {
+          for (let i = 0; i < tilesCopy.length; i++) {
+            const t = tilesCopy[i];
+            if (`${t.type}-${t.number}` === need) {
+              group.push(t);
+              tilesCopy.splice(i, 1);
+              break;
+            }
+          }
+        }
+
+        melds.push({ type: "chow", tiles: group });
+      }
+    }
+
+    return { pair, melds };
+  }
+
+  /**
+   * =========================
+   * Key Builders
+   * =========================
+   */
+  static buildChowKeyForStoreWinningData(tiles) {
+    const numbers = tiles.map((t) => t.number).sort((a, b) => a - b);
+    return `${tiles[0].type}_${numbers.join("_")}`;
+  }
+
+  static buildPongKeyForStoreWinningData(tiles) {
+    return `${tiles[0].type}_${tiles[0].number}`;
   }
 
   static async sortHand(socket, payload, io) {

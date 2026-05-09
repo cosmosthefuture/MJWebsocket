@@ -196,7 +196,7 @@
           guests = [],
           countdownRemaining,
           dice,
-          firstPlayer,
+          currentTurnPlayer,
           handState = [],
           wallCount = null,
           currentTurnUserId,
@@ -223,8 +223,8 @@
         }
 
         // ================= FIRST PLAYER =================
-        if (firstPlayer) {
-          updateFirstPlayer(firstPlayer.user_id, firstPlayer.user_name);
+        if (currentTurnPlayer) {
+          updateFirstPlayer(currentTurnPlayer.user_id, currentTurnPlayer.user_name);
         }
 
         // ================= HAND STATE =================

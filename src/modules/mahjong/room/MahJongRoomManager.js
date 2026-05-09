@@ -54,6 +54,8 @@ const CURRENT_TURN_PLAYER_KEY = (roomId) =>
 const TURN_COUNTDOWN_END_KEY = (roomId) =>
   `mahjong:room:${roomId}:turn_countdown_end`;
 
+const DRAW_STATUS_KEY = (roomId) => `mahjong:room:${roomId}:draw`;
+
 export const WINNING_DATA_KEY = (roomId) =>
   `mahjong:room:${roomId}:winning_data`;
 
@@ -177,6 +179,124 @@ export default class MahJongRoomManager {
               "mahjong:initial_hand_state",
               JSON.parse(hand_state),
             );
+          }
+        } else if (phase == "waiting_discard") {
+          const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
+          if (winningDataRaw) {
+            const winningData = JSON.parse(winningDataRaw);
+            socket.emit("mahjong:winner_reveal", winningData);
+            return;
+          }
+          const drawStatus = await redis.get(DRAW_STATUS_KEY(roomId));
+          if (drawStatus) {
+            socket.emit("mahjong:draw_round");
+            return;
+          }
+
+          const current_turn_player_id = await redis.get(
+            CURRENT_TURN_PLAYER_KEY(roomId),
+          );
+
+          const current_turn_player_raw = await redis.hget(
+            ROUND_PLAYERS_KEY(roomId),
+            current_turn_player_id,
+          );
+          const current_turn_player = current_turn_player_raw
+            ? JSON.parse(current_turn_player_raw)
+            : null;
+
+          if (current_turn_player.userId == userId) {
+            const firstPlayerRaw = await redis.get(
+              ROOM_FIRST_PLAYER_KEY(roomId),
+            );
+            const firstPlayer = firstPlayerRaw
+              ? JSON.parse(firstPlayerRaw)
+              : null;
+            if (firstPlayer) {
+              if (firstPlayer.user_id == userId) {
+                const last_discarded_tile = await redis.get(
+                  LAST_DISCARD_KEY(roomId),
+                );
+                if (!last_discarded_tile) {
+                  const handStateRaw = await redis.get(
+                    PLAYER_VIEW_HAND_KEY(roomId, userId),
+                  );
+                  const handState = JSON.parse(handStateRaw);
+                  if (!handState.kong || handState.kong.length == 0) {
+                    const kongData = await this.checkKongExist(roomId, userId);
+                    if (kongData.canKong) {
+                      io.to(`user:${userId}`).emit("mahjong:can_kong", {
+                        canKong: true,
+                        groups: kongData.groups,
+                      });
+                    }
+                  }
+                }
+              }
+            } else {
+              const last_discarded_tile_raw = await redis.get(
+                LAST_DISCARD_KEY(roomId),
+              );
+              if (last_discarded_tile_raw) {
+                const last_discarded_tile = JSON.parse(last_discarded_tile_raw);
+                if (last_discarded_tile.discard_by !== userId) {
+                  const kongData =
+                    await MahJongRoomManager.checkKongUsingDiscard(
+                      roomId,
+                      userId,
+                      last_discarded_tile.tile,
+                    );
+                  const pongData =
+                    await MahJongRoomManager.checkPongUsingDiscard(
+                      roomId,
+                      userId,
+                      last_discarded_tile.tile,
+                    );
+                  const chowData =
+                    await MahJongRoomManager.checkChowUsingDiscard(
+                      roomId,
+                      userId,
+                      last_discarded_tile.tile,
+                    );
+                  const wallCount = await redis.llen(WALL_KEY(roomId));
+                  if (wallCount <= 0) {
+                    if (pongData.canPong) {
+                      io.to(`user:${userId}`).emit("mahjong:can_normal_pong", {
+                        canPong: pongData.canPong,
+                        groups: pongData.groups,
+                      });
+                    } else if (!pongData.canPong && chowData.canChow) {
+                      io.to(`user:${userId}`).emit("mahjong:can_normal_chow", {
+                        canChow: chowData.canChow,
+                        groups: chowData.groups,
+                      });
+                    } else if (!pongData.canPong && !chowData.canChow) {
+                      io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
+                      await redis.set(DRAW_STATUS_KEY(roomId), true);
+                      await MahJongRoomManager.endRound(roomId, io);
+                      return;
+                    }
+                  } else {
+                    if (kongData.canKong) {
+                      io.to(`user:${userId}`).emit("mahjong:can_normal_kong", {
+                        canKong: kongData.canKong,
+                        groups: kongData.groups,
+                      });
+                    } else if (!kongData.canKong && pongData.canPong) {
+                      io.to(`user:${userId}`).emit("mahjong:can_normal_pong", {
+                        canPong: pongData.canPong,
+                        groups: pongData.groups,
+                      });
+                    } else if (!pongData.canPong && chowData.canChow) {
+                      io.to(`user:${userId}`).emit("mahjong:can_normal_chow", {
+                        canChow: chowData.canChow,
+                        groups: chowData.groups,
+                      });
+                    }
+                  }
+                }
+              }
+            }
           }
         } else if (phase == "round_end") {
           socket.emit("mahjong:round_end");
@@ -1309,6 +1429,7 @@ export default class MahJongRoomManager {
      */
     // await this.startPlayerTurn(roomId, userId, io);
 
+    await redis.del(ROOM_FIRST_PLAYER_KEY(roomId));
     await redis.set(CURRENT_TURN_PLAYER_KEY(roomId), userId);
 
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "waiting_discard");
@@ -1602,6 +1723,7 @@ export default class MahJongRoomManager {
      */
     // await this.startPlayerTurn(roomId, userId, io);
 
+    await redis.del(ROOM_FIRST_PLAYER_KEY(roomId));
     await redis.set(CURRENT_TURN_PLAYER_KEY(roomId), userId);
 
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "waiting_discard");
@@ -3973,6 +4095,7 @@ export default class MahJongRoomManager {
 
     const nextPlayer = players[nextIndex];
 
+    await redis.del(ROOM_FIRST_PLAYER_KEY(roomId));
     await redis.set(CURRENT_TURN_PLAYER_KEY(roomId), nextPlayer.userId);
 
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "waiting_discard");
@@ -4145,6 +4268,7 @@ export default class MahJongRoomManager {
     if (!kongData.canKong && !pongData.canPong && !chowData.canChow) {
       if (wallCount <= 0) {
         io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
+        await redis.set(DRAW_STATUS_KEY(roomId), true);
         await MahJongRoomManager.endRound(roomId, io);
         return;
       }
@@ -4289,6 +4413,7 @@ export default class MahJongRoomManager {
           });
         } else if (!pongData.canPong && !chowData.canChow) {
           io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
+          await redis.set(DRAW_STATUS_KEY(roomId), true);
           await MahJongRoomManager.endRound(roomId, io);
           return;
         }
@@ -4373,6 +4498,7 @@ export default class MahJongRoomManager {
           ) {
             if (wallCount <= 0) {
               io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
+              await redis.set(DRAW_STATUS_KEY(roomId), true);
               await MahJongRoomManager.endRound(roomId, io);
               return;
             }
@@ -5220,7 +5346,10 @@ export default class MahJongRoomManager {
       if (counts[key] >= 3) {
         counts[key] -= 3;
 
-        const res = MahJongRoomManager.solveMeldsForStoreWinningData(counts, [...path, { type: "pong", key }]);
+        const res = MahJongRoomManager.solveMeldsForStoreWinningData(counts, [
+          ...path,
+          { type: "pong", key },
+        ]);
 
         if (res) return res;
 
@@ -5661,6 +5790,7 @@ export default class MahJongRoomManager {
     const round = await redis.get(ROUND_KEY(roomId));
     const roundData = JSON.parse(round);
     await ToLaravelService.endRound(roundData.roundId);
+    await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "round_end");
     io.to(SOCKET_ROOM(roomId)).emit("mahjong:round_end");
     await this.wait(3000);
     await this.clearRoomData(roomId, io);
@@ -5751,6 +5881,7 @@ export default class MahJongRoomManager {
       redis.del(CURRENT_TURN_PLAYER_KEY(roomId)),
 
       redis.del(WINNING_DATA_KEY(roomId)),
+      redis.del(DRAW_STATUS_KEY(roomId)),
     ]);
 
     /**
@@ -5773,7 +5904,7 @@ export default class MahJongRoomManager {
       status,
       countdownEnd,
       diceRaw,
-      firstPlayerRaw,
+      currentTurnPlayerIdRaw,
       handStateRaw,
       wallCount,
     ] = await Promise.all([
@@ -5786,7 +5917,7 @@ export default class MahJongRoomManager {
       redis.get(ROOM_STATUS_KEY(roomId)),
       redis.get(COUNTDOWN_KEY(roomId)),
       redis.get(ROOM_DICE_KEY(roomId)),
-      redis.get(ROOM_FIRST_PLAYER_KEY(roomId)),
+      redis.get(CURRENT_TURN_PLAYER_KEY(roomId)),
       userId
         ? redis.get(PLAYER_VIEW_HAND_KEY(roomId, userId))
         : Promise.resolve(null),
@@ -5795,7 +5926,8 @@ export default class MahJongRoomManager {
 
     // parse safely
     let dice = null;
-    let firstPlayer = null;
+    let currentTurnPlayerId = null;
+    let currentTurnPlayer = null;
     let handState = null;
 
     try {
@@ -5805,7 +5937,19 @@ export default class MahJongRoomManager {
     }
 
     try {
-      if (firstPlayerRaw) firstPlayer = JSON.parse(firstPlayerRaw);
+      if (currentTurnPlayerIdRaw)
+        currentTurnPlayerId = JSON.parse(currentTurnPlayerIdRaw);
+      const current_turn_player_raw = await redis.hget(
+        ROUND_PLAYERS_KEY(roomId),
+        currentTurnPlayerId,
+      );
+      const current_turn_player = current_turn_player_raw
+        ? JSON.parse(current_turn_player_raw)
+        : null;
+      currentTurnPlayer = {
+        user_id: current_turn_player.userId,
+        user_name: current_turn_player.name,
+      };
     } catch (e) {
       console.error("Invalid first player data");
     }
@@ -5832,7 +5976,7 @@ export default class MahJongRoomManager {
 
       // ✅ new fields
       dice, // { d1, d2, total }
-      firstPlayer, // { user_id, user_name }
+      currentTurnPlayer, // { user_id, user_name }
       handState,
       wallCount,
     };

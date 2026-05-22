@@ -78,6 +78,10 @@
     <button onclick="acceptNormalChow()">Accept Normal Chow</button>
     <button onclick="passNormalChow()">Pass Normal Chow</button>
 
+    <br /><br />
+    <button onclick="temporaryStartRound()">Start Round</button>
+    <button onclick="temporaryEndRound()">End Round</button>
+
     <div class="section">
       <h3 id="statusDisplay">Status: -</h3>
       <h3 id="countdownDisplay">Countdown: -</h3>
@@ -224,7 +228,10 @@
 
         // ================= FIRST PLAYER =================
         if (currentTurnPlayer) {
-          updateFirstPlayer(currentTurnPlayer.user_id, currentTurnPlayer.user_name);
+          updateFirstPlayer(
+            currentTurnPlayer.user_id,
+            currentTurnPlayer.user_name,
+          );
         }
 
         // ================= HAND STATE =================
@@ -670,6 +677,10 @@
             log("ROUND END");
           });
 
+          socket.on("mahjong:show_start_round", (data) => {
+            log("Show Start Round");
+          });
+
           socket.on("mahjong:error", (err) => {
             log("❌ Error: " + JSON.stringify(err));
           });
@@ -841,6 +852,21 @@
           roomId,
           userId: user_id,
           tileId,
+        });
+      }
+
+      function temporaryStartRound() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:temporary_start_round", {
+          roomId,
+          userId: user_id,
+        });
+      }
+
+      function temporaryEndRound() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:temporary_end_round", {
+          roomId,
         });
       }
 

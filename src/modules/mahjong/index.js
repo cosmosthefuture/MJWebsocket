@@ -18,4 +18,8 @@ export default {
   [EVENTS.PASS_NORMAL_PONG]: MahJongRoomManager.passNormalPong,
   [EVENTS.ACCEPT_NORMAL_CHOW]: MahJongRoomManager.acceptNormalChow,
   [EVENTS.PASS_NORMAL_CHOW]: MahJongRoomManager.passNormalChow,
+
+  // temporary
+  ["mahjong:temporary_start_round"]: MahJongRoomManager.temporaryStartRound,
+  ["mahjong:temporary_end_round"]: MahJongRoomManager.temporaryEndRound
 };

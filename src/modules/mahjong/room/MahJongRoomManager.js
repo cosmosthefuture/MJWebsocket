@@ -15,7 +15,13 @@ const ROUND_PLAYERS_KEY = (roomId) => `room:${roomId}:round_players`;
 const GUESTS_KEY = (roomId) => `room:${roomId}:guests`;
 
 const PLAYER_ROOM_KEY = (userId) => `player:${userId}`;
+// temporary codes. Delete later
+const GAME_START_KEY = (roomId, userId) =>
+  `room:${roomId}:game_start:${userId}`;
 
+const GAME_END_KEY = (roomId) => `room:${roomId}:game_end`;
+
+// temporary codes. Delete later
 const ROOM_STATUS_KEY = (roomId) => `room:${roomId}:status`;
 const ROOM_PLAYING_PHASE_KEY = (roomId) => `room:${roomId}:phase`;
 const PLAYING_PHASE_WITH_TILE_KEY = (roomId) =>
@@ -501,6 +507,8 @@ export default class MahJongRoomManager {
           return;
         }
 
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:show_start_round");
+        return;
         await this.startRound(socket, roomId, io);
       }
     }, 1000);
@@ -508,13 +516,53 @@ export default class MahJongRoomManager {
 
   static async syncCountdown(socket, roomId) {
     const endTime = await redis.get(COUNTDOWN_KEY(roomId));
-    if (!endTime) return;
+    if (!endTime){
+      // temporary codes. Delete later.
+      socket.emit("mahjong:show_start_round");
+      return;
+    } 
 
     const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
 
+    console.log("SYNC COUNTDOWN")
     if (remaining > 0) {
       socket.emit("mahjong:countdown", { remaining });
+    } else {
+      // temporary codes. Delete later.
+      socket.emit("mahjong:show_start_round");
     }
+  }
+
+  // temporary codes. Delete later.
+  static async temporaryStartRound(socket, payload, io) {
+    const { roomId, userId } = payload;
+    await redis.set(GAME_START_KEY(roomId, userId), "clicked_start");
+    const playersRaw = await redis.hgetall(PLAYERS_KEY(roomId));
+
+    const players = Object.values(playersRaw).map(JSON.parse);
+
+    // console.log("PLAYERS:: ", players)
+    // 4. Clear old hands + old player view hands
+    for (const player of players) {
+      let data = null;
+      data = await redis.get(GAME_START_KEY(roomId, player.userId));
+      if (!data) {
+        return;
+      }
+    }
+    if (players.length < 2) {
+      await redis.set(ROOM_STATUS_KEY(roomId), "waiting");
+      io.to(SOCKET_ROOM(roomId)).emit("mahjong:waiting_for_players");
+      return;
+    }
+    await MahJongRoomManager.startRound(socket, roomId, io);
+  }
+
+  // temporary codes. Delete later.
+  static async temporaryEndRound(socket, payload, io) {
+    const { roomId } = payload;
+    await redis.set(GAME_END_KEY(roomId), "end_game");
+    // await MahJongRoomManager.endRound(roomId, io);
   }
 
   // ================= START ROUND =================
@@ -4051,6 +4099,13 @@ export default class MahJongRoomManager {
   }
 
   static async startNextTurn(socket, roomId, io) {
+    // temporary codes. Delete later. 
+    const end_status = await redis.get(GAME_END_KEY(roomId));
+    if(end_status) {
+      await MahJongRoomManager.endRound(roomId, io);
+      return;
+    }
+    // temporary codes. Delete later. 
     const currentTurnUserId = await redis.get(CURRENT_TURN_PLAYER_KEY(roomId));
 
     const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
@@ -5820,6 +5875,13 @@ export default class MahJongRoomManager {
       allUsers.map((userId) => redis.del(PLAYER_ROOM_KEY(userId))),
     );
 
+    // temporary codes. Delete later.
+    for (const each of allUsers) {
+      await Promise.all([
+        redis.del(GAME_START_KEY(roomId, each)),
+      ]);
+    }
+    // temporary codes. Delete later.
     /**
      * =====================================
      * Get round players
@@ -5882,6 +5944,10 @@ export default class MahJongRoomManager {
 
       redis.del(WINNING_DATA_KEY(roomId)),
       redis.del(DRAW_STATUS_KEY(roomId)),
+
+      // temporary codes. Delete later.
+      redis.del(GAME_END_KEY(roomId)),
+      // temporary codes. Delete later.
     ]);
 
     /**

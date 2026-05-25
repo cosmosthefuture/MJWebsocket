@@ -948,6 +948,7 @@ export default class MahJongRoomManager {
 
     const result = await this.checkWinningHand(roomId, userId);
     if (result.canWin) {
+      // ask win decision here
       io.to(`user:${userId}`).emit("mahjong:you_win");
       await this.storeWinningData(roomId, userId);
       const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
@@ -1247,6 +1248,7 @@ export default class MahJongRoomManager {
       userId,
     );
     if (winning_hand_result.canWin) {
+      // ask win decision here
       io.to(`user:${userId}`).emit("mahjong:you_win");
       await MahJongRoomManager.storeWinningData(roomId, userId);
       const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
@@ -1505,6 +1507,7 @@ export default class MahJongRoomManager {
 
     const result = await MahJongRoomManager.checkWinningHand(roomId, userId);
     if (result.canWin) {
+      // ask win decision here
       io.to(`user:${userId}`).emit("mahjong:you_win");
       await MahJongRoomManager.storeWinningData(roomId, userId);
       const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
@@ -1799,6 +1802,7 @@ export default class MahJongRoomManager {
 
     const result = await MahJongRoomManager.checkWinningHand(roomId, userId);
     if (result.canWin) {
+      // ask win decision here
       io.to(`user:${userId}`).emit("mahjong:you_win");
       await MahJongRoomManager.storeWinningData(roomId, userId);
       const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
@@ -1976,6 +1980,12 @@ export default class MahJongRoomManager {
       .map(JSON.parse)
       .sort((a, b) => a.seat - b.seat);
 
+    const discarded_player = players.find(
+      (p) => Number(p.userId) === Number(userId),
+    );
+    
+    const modifiedDiscardTile = {...discardTile, userId: discarded_player.userId, seat: discarded_player.seat};
+    
     for (const currentPlayer of players) {
       const handState = [];
 
@@ -2023,7 +2033,7 @@ export default class MahJongRoomManager {
          */
         if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
           handState.push({
-            last_discard_tile: discardTile,
+            last_discard_tile: modifiedDiscardTile,
             pong: pongData,
             chow: chowData,
             kong: kongData,
@@ -2040,7 +2050,7 @@ export default class MahJongRoomManager {
            * Others → hidden hand
            */
           handState.push({
-            last_discard_tile: discardTile,
+            last_discard_tile: modifiedDiscardTile,
             pong: pongData,
             chow: chowData,
             kong: kongData,
@@ -2353,6 +2363,7 @@ export default class MahJongRoomManager {
         discardTile,
       );
       if (result.canWin) {
+        // ask win decision here
         await redis.del(LAST_DISCARD_KEY(roomId));
         await redis.rpush(
           HAND_KEY(roomId, player.userId),
@@ -4445,6 +4456,7 @@ export default class MahJongRoomManager {
       );
       // console.log("WH In NP: ", winning_hand_result);
       if (winning_hand_result.canWin) {
+        // ask win decision here
         io.to(`user:${nextPlayer.userId}`).emit("mahjong:you_win");
         await MahJongRoomManager.storeWinningData(roomId, nextPlayer.userId);
         const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
@@ -4685,6 +4697,7 @@ export default class MahJongRoomManager {
                 nextPlayer.userId,
               );
             if (winning_hand_result.canWin) {
+              // ask win decision here
               io.to(`user:${nextPlayer.userId}`).emit("mahjong:you_win");
               await MahJongRoomManager.storeWinningData(
                 roomId,
@@ -5576,10 +5589,14 @@ export default class MahJongRoomManager {
       .map(JSON.parse)
       .sort((a, b) => a.seat - b.seat);
 
+    const discarded_player = players.find(
+      (p) => Number(p.userId) === Number(userId),
+    );
+    
     const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
     const discardTile = discardTileRaw ? JSON.parse(discardTileRaw) : null;
     const discard_tile = discardTile ? discardTile.tile : null;
-
+    const modifiedDiscardTile = discard_tile ? {...discard_tile, userId: discarded_player.userId, seat: discarded_player.seat} : null;
     const handState = [];
 
     // const smartSortTiles = (tiles) => {
@@ -5623,104 +5640,39 @@ export default class MahJongRoomManager {
 
     const smartSortTiles = (tiles) => {
       const typeOrder = {
-        bamboo: 1,
-        dot: 2,
+        dot: 1,
+        bamboo: 2,
       };
 
-      /**
-       * =====================================
-       * 1. Build map
-       * =====================================
-       */
-      const map = {};
+      return [...tiles].sort((a, b) => {
+        /**
+         * =====================================
+         * 1. Sort by tile type
+         * =====================================
+         */
+        const typeA = typeOrder[a.type] || 999;
+        const typeB = typeOrder[b.type] || 999;
 
-      for (const tile of tiles) {
-        const key = `${tile.type}_${tile.number}`;
-        if (!map[key]) map[key] = [];
-        map[key].push(tile);
-      }
-
-      const used = new Set();
-
-      const result = [];
-
-      /**
-       * =====================================
-       * 2. KONG (4 same)
-       * =====================================
-       */
-      for (const key in map) {
-        if (map[key].length >= 4) {
-          result.push(...map[key].slice(0, 4));
-          used.add(key);
+        if (typeA !== typeB) {
+          return typeA - typeB;
         }
-      }
 
-      /**
-       * =====================================
-       * 3. PONG (3 same)
-       * =====================================
-       */
-      for (const key in map) {
-        if (used.has(key)) continue;
-
-        if (map[key].length >= 3) {
-          result.push(...map[key].slice(0, 3));
-          used.add(key);
+        /**
+         * =====================================
+         * 2. Sort by number
+         * =====================================
+         */
+        if (a.number !== b.number) {
+          return a.number - b.number;
         }
-      }
 
-      /**
-       * =====================================
-       * 4. CHOW (sequence)
-       * =====================================
-       */
-      const remainingTiles = tiles.filter((t) => {
-        const key = `${t.type}_${t.number}`;
-        return !used.has(key);
+        /**
+         * =====================================
+         * 3. Sort by copy_no
+         * =====================================
+         */
+        return (a.copy_no || 0) - (b.copy_no || 0);
       });
-
-      const sortedRemaining = remainingTiles.sort((a, b) => {
-        if (a.type !== b.type) {
-          return typeOrder[a.type] - typeOrder[b.type];
-        }
-        return a.number - b.number;
-      });
-
-      const visited = new Array(sortedRemaining.length).fill(false);
-
-      for (let i = 0; i < sortedRemaining.length; i++) {
-        if (visited[i]) continue;
-
-        const a = sortedRemaining[i];
-        const b = sortedRemaining[i + 1];
-        const c = sortedRemaining[i + 2];
-
-        if (
-          b &&
-          c &&
-          a.type === b.type &&
-          a.type === c.type &&
-          a.number + 1 === b.number &&
-          a.number + 2 === c.number
-        ) {
-          result.push(a, b, c);
-          visited[i] = visited[i + 1] = visited[i + 2] = true;
-        }
-      }
-
-      /**
-       * =====================================
-       * 5. LEFTOVER (pairs/singles)
-       * =====================================
-       */
-      for (let i = 0; i < sortedRemaining.length; i++) {
-        if (!visited[i]) {
-          result.push(sortedRemaining[i]);
-        }
-      }
-
-      return result;
     };
 
     for (const targetPlayer of players) {
@@ -5791,7 +5743,7 @@ export default class MahJongRoomManager {
         }
 
         handState.push({
-          last_discard_tile: discard_tile,
+          last_discard_tile: modifiedDiscardTile,
           chow,
           pong,
           kong,
@@ -5805,7 +5757,7 @@ export default class MahJongRoomManager {
         });
       } else {
         handState.push({
-          last_discard_tile: discard_tile,
+          last_discard_tile: modifiedDiscardTile,
           chow,
           pong,
           kong,

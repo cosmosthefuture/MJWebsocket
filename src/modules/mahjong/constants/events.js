@@ -27,6 +27,9 @@ export default {
   ACCEPT_NORMAL_CHOW: "mahjong:accept_normal_chow",
   PASS_NORMAL_CHOW: "mahjong:pass_normal_chow",
 
+  ACCEPT_WIN: "mahjong:accept_win",
+  PASS_WIN: "mahjong:pass_win",
+
   ROUND_STARTED: "mahjong:round_started",
 
   ERROR: "mahjong:error",

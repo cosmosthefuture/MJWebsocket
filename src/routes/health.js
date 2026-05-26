@@ -21,6 +21,13 @@ router.post("/state/clear/:roomId", async (req, res) => {
 
     const PLAYER_ROOM_KEY = (userId) => `player:${userId}`;
 
+    // temporary codes. Delete later
+    const GAME_START_KEY = (roomId, userId) =>
+      `room:${roomId}:game_start:${userId}`;
+
+    const GAME_END_KEY = (roomId) => `room:${roomId}:game_end`;
+    // temporary codes. Delete later
+
     const ROOM_STATUS_KEY = (roomId) => `room:${roomId}:status`;
     const ROOM_PLAYING_PHASE_KEY = (roomId) => `room:${roomId}:phase`;
     const PLAYING_PHASE_WITH_TILE_KEY = (roomId) =>
@@ -67,6 +74,9 @@ router.post("/state/clear/:roomId", async (req, res) => {
     const WINNING_DATA_KEY = (roomId) =>
       `mahjong:room:${roomId}:winning_data`;
 
+    const WIN_DECLINE_PLAYER_IDS_KEY = (roomId) =>
+      `room:${roomId}:win_decline_player_ids`;
+
     const { roomId } = req.params;
     const players = await redis.hgetall(PLAYERS_KEY(roomId));
 
@@ -84,6 +94,14 @@ router.post("/state/clear/:roomId", async (req, res) => {
     await Promise.all(
       allUsers.map((userId) => redis.del(PLAYER_ROOM_KEY(userId))),
     );
+
+    // temporary codes. Delete later.
+    for (const each of allUsers) {
+      await Promise.all([
+        redis.del(GAME_START_KEY(roomId, each)),
+      ]);
+    }
+    // temporary codes. Delete later.
 
     /**
      * =====================================
@@ -147,6 +165,12 @@ router.post("/state/clear/:roomId", async (req, res) => {
 
       redis.del(WINNING_DATA_KEY(roomId)),
       redis.del(DRAW_STATUS_KEY(roomId)),
+
+      redis.del(WIN_DECLINE_PLAYER_IDS_KEY(roomId)),
+
+      // temporary codes. Delete later.
+      redis.del(GAME_END_KEY(roomId)),
+      // temporary codes. Delete later.
     ]);
     return res.status(200).json({
         status: "success",

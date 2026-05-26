@@ -972,7 +972,7 @@ export default class MahJongRoomManager {
     // }
     // temporary codes. delete later
 
-    const duration = 60;
+    const duration = 30;
 
     const countdownEndTime = Date.now() + duration * 1000;
 
@@ -992,9 +992,9 @@ export default class MahJongRoomManager {
       user_name: currentPlayer?.name || null,
     });
 
-    io.to(`user:${userId}`).emit("mahjong:turn_countdown_started", {
+    io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown_started", {
       user_id: userId,
-      duration: 60,
+      duration: 30,
     });
 
     const result = await this.checkWinningHand(roomId, userId);
@@ -1031,7 +1031,7 @@ export default class MahJongRoomManager {
       }
       remaining--;
 
-      io.to(`user:${userId}`).emit("mahjong:turn_countdown", {
+      io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown", {
         user_id: userId,
         remaining,
       });
@@ -1042,7 +1042,7 @@ export default class MahJongRoomManager {
       if (remaining <= 0) {
         clearInterval(countdownInterval);
 
-        io.to(`user:${userId}`).emit("mahjong:turn_countdown_finished", {
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown_finished", {
           user_id: userId,
         });
 
@@ -1535,7 +1535,7 @@ export default class MahJongRoomManager {
 
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "waiting_discard");
 
-    const duration = 60;
+    const duration = 30;
 
     const countdownEndTime = Date.now() + duration * 1000;
 
@@ -1551,9 +1551,9 @@ export default class MahJongRoomManager {
       user_name: currentPlayer?.name || null,
     });
 
-    io.to(`user:${userId}`).emit("mahjong:turn_countdown_started", {
+    io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown_started", {
       user_id: userId,
-      duration: 60,
+      duration: 30,
     });
 
     const result = await MahJongRoomManager.checkWinningHand(roomId, userId);
@@ -1582,7 +1582,7 @@ export default class MahJongRoomManager {
       }
       remaining--;
 
-      io.to(`user:${userId}`).emit("mahjong:turn_countdown", {
+      io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown", {
         user_id: userId,
         remaining,
       });
@@ -1593,7 +1593,7 @@ export default class MahJongRoomManager {
       if (remaining <= 0) {
         clearInterval(countdownInterval);
 
-        io.to(`user:${userId}`).emit("mahjong:turn_countdown_finished", {
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown_finished", {
           user_id: userId,
         });
 
@@ -1830,7 +1830,7 @@ export default class MahJongRoomManager {
 
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "waiting_discard");
 
-    const duration = 60;
+    const duration = 30;
 
     const countdownEndTime = Date.now() + duration * 1000;
 
@@ -1846,9 +1846,9 @@ export default class MahJongRoomManager {
       user_name: currentPlayer?.name || null,
     });
 
-    io.to(`user:${userId}`).emit("mahjong:turn_countdown_started", {
+    io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown_started", {
       user_id: userId,
-      duration: 60,
+      duration: 30,
     });
 
     const result = await MahJongRoomManager.checkWinningHand(roomId, userId);
@@ -1873,7 +1873,7 @@ export default class MahJongRoomManager {
       }
       remaining--;
 
-      io.to(`user:${userId}`).emit("mahjong:turn_countdown", {
+      io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown", {
         user_id: userId,
         remaining,
       });
@@ -1884,7 +1884,7 @@ export default class MahJongRoomManager {
       if (remaining <= 0) {
         clearInterval(countdownInterval);
 
-        io.to(`user:${userId}`).emit("mahjong:turn_countdown_finished", {
+        io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown_finished", {
           user_id: userId,
         });
 
@@ -2852,7 +2852,7 @@ export default class MahJongRoomManager {
           wallCount,
         });
 
-        await redis.rpush(HAND_KEY(roomId, nextPlayer.userId), drawTile);
+        await redis.rpush(HAND_KEY(roomId, userId), drawTile);
 
         const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
 
@@ -4583,7 +4583,7 @@ export default class MahJongRoomManager {
 
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "waiting_discard");
 
-    const duration = 60;
+    const duration = 30;
 
     const countdownEndTime = Date.now() + duration * 1000;
 
@@ -4595,9 +4595,9 @@ export default class MahJongRoomManager {
       user_name: nextPlayer?.name || null,
     });
 
-    io.to(`user:${nextPlayer.userId}`).emit("mahjong:turn_countdown_started", {
+    io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown_started", {
       user_id: nextPlayer.userId,
-      duration: 60,
+      duration: 30,
     });
 
     const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
@@ -5132,7 +5132,7 @@ console.log("IS DECLINED::", isDeclined);
         // remaining = 0;
         clearInterval(countdownInterval);
 
-        io.to(`user:${nextPlayer.userId}`).emit(
+        io.to(SOCKET_ROOM(roomId)).emit(
           "mahjong:turn_countdown_finished",
           {
             user_id: nextPlayer.userId,
@@ -5142,7 +5142,7 @@ console.log("IS DECLINED::", isDeclined);
       }
       remaining--;
 
-      io.to(`user:${nextPlayer.userId}`).emit("mahjong:turn_countdown", {
+      io.to(SOCKET_ROOM(roomId)).emit("mahjong:turn_countdown", {
         user_id: nextPlayer.userId,
         remaining,
       });
@@ -5153,7 +5153,7 @@ console.log("IS DECLINED::", isDeclined);
       if (remaining <= 0) {
         clearInterval(countdownInterval);
 
-        io.to(`user:${nextPlayer.userId}`).emit(
+        io.to(SOCKET_ROOM(roomId)).emit(
           "mahjong:turn_countdown_finished",
           {
             user_id: nextPlayer.userId,

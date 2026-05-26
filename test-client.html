@@ -82,6 +82,10 @@
     <button onclick="temporaryStartRound()">Start Round</button>
     <button onclick="temporaryEndRound()">End Round</button>
 
+    <br /><br />
+    <button onclick="acceptWin()">Accept Win</button>
+    <button onclick="passWin()">Pass Win</button>
+
     <div class="section">
       <h3 id="statusDisplay">Status: -</h3>
       <h3 id="countdownDisplay">Countdown: -</h3>
@@ -681,6 +685,15 @@
             log("Show Start Round");
           });
 
+          socket.on("mahjong:ask_win_decision", (data) => {
+            log("Asking Win Decision");
+            console.log("Asking Win Decision" + data.message);
+          });
+          socket.on("mahjong:remove_win_decision", () => {
+            log("Remove Win Decision");
+            console.log("Remove Win Decision");
+          });
+
           socket.on("mahjong:error", (err) => {
             log("❌ Error: " + JSON.stringify(err));
           });
@@ -867,6 +880,22 @@
         const roomId = document.getElementById("roomIdInput").value;
         socket.emit("mahjong:temporary_end_round", {
           roomId,
+        });
+      }
+
+      function acceptWin() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:accept_win", {
+          roomId,
+          userId: user_id
+        });
+      }
+
+      function passWin() {
+        const roomId = document.getElementById("roomIdInput").value;
+        socket.emit("mahjong:pass_win", {
+          roomId,
+          userId: user_id
         });
       }
 

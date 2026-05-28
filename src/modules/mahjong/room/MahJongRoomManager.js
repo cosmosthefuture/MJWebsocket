@@ -5295,6 +5295,9 @@ console.log("IS DECLINED::", isDeclined);
     const payouts = [];
     let leftPlayerId = null;
     
+    // Find winner object
+    const winner = roundPlayers.find(p => p.userId === winnerId);
+    
     // Calculate payouts based on win type
     if (winType === 'self-draw') {
       // Self-draw win: all other players pay
@@ -5303,7 +5306,8 @@ console.log("IS DECLINED::", isDeclined);
       for (const player of roundPlayers) {
         if (player.userId !== winnerId) {
           payouts.push({
-            payerId: player.userId,
+            winner: winner,
+            payer: player,
             amount: betAmount * multiplier
           });
         }
@@ -5324,7 +5328,8 @@ console.log("IS DECLINED::", isDeclined);
             : othersMultiplier;
           
           payouts.push({
-            payerId: player.userId,
+            winner: winner,
+            payer: player,
             amount: betAmount * multiplier
           });
         }
@@ -5337,7 +5342,8 @@ console.log("IS DECLINED::", isDeclined);
         for (const player of roundPlayers) {
           if (player.userId !== winnerId) {
             payouts.push({
-              payerId: player.userId,
+              winner: winner,
+              payer: player,
               amount: betAmount * 3
             });
           }
@@ -5350,7 +5356,8 @@ console.log("IS DECLINED::", isDeclined);
         for (const player of roundPlayers) {
           if (player.userId !== winnerId) {
             payouts.push({
-              payerId: player.userId,
+              winner: winner,
+              payer: player,
               amount: betAmount * multiplier
             });
           }
@@ -5364,6 +5371,7 @@ console.log("IS DECLINED::", isDeclined);
     // Build payout data object
     const payoutData = {
       winnerId,
+      winner,
       winType,
       isPure,
       payouts
@@ -5372,6 +5380,7 @@ console.log("IS DECLINED::", isDeclined);
     // Add optional metadata
     if (winType === 'left-discard' && leftPlayerId) {
       payoutData.leftPlayerId = leftPlayerId;
+      payoutData.leftPlayer = roundPlayers.find(p => p.userId === leftPlayerId);
     }
     
     if (winType === 'shown-tile' && isPure && consecutiveCount) {

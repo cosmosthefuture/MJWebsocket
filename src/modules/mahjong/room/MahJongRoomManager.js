@@ -2082,7 +2082,7 @@ export default class MahJongRoomManager {
           !already_discard_tile_raw ||
           already_discard_tile?.discard_by !== userId
         ) {
-          const lastTile = await redis.lindex(HAND_KEY(roomId, 1), -1);
+          const lastTile = await redis.lindex(HAND_KEY(roomId, userId), -1);
 
           const parsedTile = lastTile ? JSON.parse(lastTile) : null;
           await MahJongRoomManager.discardTile(

@@ -1496,7 +1496,7 @@ export default class MahJongRoomManager {
      * =========================================
      */
 
-    // Call afterKong helper to handle extra draw, shown tile offer, and win check
+    // Call afterKong helper to handle win check, shown tile offer, and kong chaining
     await MahJongRoomManager.afterKong(roomId, userId, io);
   }
 
@@ -1749,7 +1749,7 @@ export default class MahJongRoomManager {
       return;
     }
 
-    // Call afterKong helper to handle extra draw, shown tile offer, and win check
+    // Call afterKong helper to handle shown tile offer and win check
     await MahJongRoomManager.afterKong(roomId, userId, io);
 
     let remaining = duration;
@@ -3701,7 +3701,7 @@ export default class MahJongRoomManager {
       return;
     }
     
-    // Call afterKong helper to handle extra draw, shown tile offer, and win check
+    // Call afterKong helper to handle shown tile offer and win check
     await MahJongRoomManager.afterKong(roomId, userId, io);
     // await this.startPlayerTurn(roomId, userId, io);
   }
@@ -6414,36 +6414,22 @@ console.log("IS DECLINED::", isDeclined);
 
   // ================= AFTER KONG HELPER =================
   /**
-   * Helper function called after Kong is accepted
-   * Handles: extra draw, win check, shown tile offer, Kong chaining
+   * Helper function called after Kong is accepted.
+   * The kong functions (acceptKong, acceptInterruptKong, acceptNormalKong)
+   * already draw the replacement tile. This helper only handles:
+   * - Win check (self-draw from the replacement tile)
+   * - Shown tile offer
+   * - Kong chaining
    */
   static async afterKong(roomId, userId, io) {
-    // 1. Draw 1 extra tile from wall
-    const extraTileRaw = await redis.lpop(WALL_KEY(roomId));
-    
-    if (!extraTileRaw) {
-      // Wall is empty, cannot draw extra tile
-      return;
-    }
-    
-    const extraTile = JSON.parse(extraTileRaw);
-    await redis.rpush(HAND_KEY(roomId, userId), JSON.stringify(extraTile));
-    
-    // Update wall count
-    const wallCount = await redis.llen(WALL_KEY(roomId));
-    io.to(SOCKET_ROOM(roomId)).emit('mahjong:wall_count_updated', {
-      wallCount
-    });
-    
-    // 2. Check win (self-draw)
+    // 1. Check win (self-draw) — the replacement tile was already drawn by the caller
     const winResult = await MahJongRoomManager.checkWinningHand(roomId, userId);
     if (winResult.canWin) {
-      // Handle self-draw win after Kong using unified handleWin function
       await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', winResult.isPure, io);
       return;
     }
     
-    // 3. If no win, emit 'mahjong:can_take_shown_tile' with shown tiles
+    // 2. If no win, offer shown tile (player has Kong so they qualify)
     const kongCount = await redis.llen(KONG_KEY(roomId, userId));
     if (kongCount > 0) {
       const shownTilesRaw = await redis.get(SHOWN_TILES_KEY(roomId));
@@ -6455,12 +6441,12 @@ console.log("IS DECLINED::", isDeclined);
           shownTiles
         });
         
-        // 4. Wait 3-4 seconds for decision
+        // 3. Wait 3-4 seconds for decision
         await MahJongRoomManager.wait(3000);
       }
     }
     
-    // 5. Check if another Kong possible, emit 'mahjong:can_kong' if yes
+    // 4. Check if another Kong possible, emit 'mahjong:can_kong' if yes
     const kongData = await MahJongRoomManager.checkKongExist(roomId, userId);
     if (kongData.canKong) {
       io.to(`user:${userId}`).emit('mahjong:can_kong', {

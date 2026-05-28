@@ -19,5 +19,6 @@ export default {
   // REMOVED: ACCEPT_NORMAL_CHOW and PASS_NORMAL_CHOW (no chow from discard in Loukkai Mahjong)
   [EVENTS.ACCEPT_WIN]: MahJongRoomManager.acceptWin,
   [EVENTS.PASS_WIN]: MahJongRoomManager.passWin,
-  [EVENTS.TAKE_SHOWN_TILE]: MahJongRoomManager.takeShownTile
+  [EVENTS.TAKE_SHOWN_TILE]: MahJongRoomManager.takeShownTile,
+  [EVENTS.START_ROUND]: MahJongRoomManager.startRoundRequest
 };

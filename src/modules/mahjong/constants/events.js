@@ -32,6 +32,8 @@ export default {
 
   TAKE_SHOWN_TILE: "mahjong:take_shown_tile",
 
+  START_ROUND: "mahjong:start_round",
+
   ROUND_STARTED: "mahjong:round_started",
 
   ERROR: "mahjong:error",

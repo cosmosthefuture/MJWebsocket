@@ -70,6 +70,10 @@ const SHOWN_TILES_TAKEN_THIS_TURN_KEY = (roomId, userId) =>
 
 const PAYOUT_DATA_KEY = (roomId) => `mahjong:room:${roomId}:payout_data`;
 
+// Tracks which players have clicked "Start Round" (ready check)
+const START_ROUND_READY_KEY = (roomId) =>
+  `mahjong:room:${roomId}:start_round_ready`;
+
 export default class MahJongRoomManager {
   static async joinRoom({ roomId, user, socket, io }) {
     const { id: userId, name } = user;
@@ -558,6 +562,53 @@ export default class MahJongRoomManager {
     } else {
       socket.emit("mahjong:show_start_round");
     }
+  }
+
+  // ================= START ROUND REQUEST =================
+  /**
+   * Handler for when a player clicks "Start Round" after the countdown completes.
+   * Implements a ready-check pattern: server waits until all players in the lobby
+   * have clicked Start before triggering the actual round start (dice roll → deal).
+   */
+  static async startRoundRequest(socket, payload, io) {
+    const { roomId, userId } = payload;
+
+    // Only allow when the room is in the post-countdown waiting state
+    const status = await redis.get(ROOM_STATUS_KEY(roomId));
+    if (status === "playing" || status === "round_end") {
+      return;
+    }
+
+    // Mark this player as ready
+    await redis.sadd(START_ROUND_READY_KEY(roomId), String(userId));
+
+    // Get current lobby players
+    const playersRaw = await redis.hgetall(PLAYERS_KEY(roomId));
+    const players = Object.values(playersRaw).map(JSON.parse);
+
+    // Need at least 2 players (Loukkai rule: 2-3 players)
+    if (players.length < 2) {
+      await redis.set(ROOM_STATUS_KEY(roomId), "waiting");
+      await redis.del(START_ROUND_READY_KEY(roomId));
+      io.to(SOCKET_ROOM(roomId)).emit("mahjong:waiting_for_players");
+      return;
+    }
+
+    // Check if all players have clicked Start
+    const readyCount = await redis.scard(START_ROUND_READY_KEY(roomId));
+    if (readyCount < players.length) {
+      // Still waiting on others — let everyone know who's ready
+      const readyIds = await redis.smembers(START_ROUND_READY_KEY(roomId));
+      io.to(SOCKET_ROOM(roomId)).emit("mahjong:start_round_ready_update", {
+        readyUserIds: readyIds,
+        totalPlayers: players.length,
+      });
+      return;
+    }
+
+    // All ready — clear the ready set and start the round
+    await redis.del(START_ROUND_READY_KEY(roomId));
+    await MahJongRoomManager.startRound(socket, roomId, io);
   }
 
   // ================= START ROUND =================
@@ -6346,6 +6397,7 @@ console.log("IS DECLINED::", isDeclined);
       // New keys for Loukkai variant
       redis.del(SHOWN_TILES_KEY(roomId)),
       redis.del(PAYOUT_DATA_KEY(roomId)),
+      redis.del(START_ROUND_READY_KEY(roomId)),
 
     ]);
 

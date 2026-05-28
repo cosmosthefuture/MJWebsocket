@@ -4926,7 +4926,8 @@ console.log("IS DECLINED::", isDeclined);
               await MahJongRoomManager.handleWin(roomId, nextPlayer.userId, 'self-draw', winning_hand_result.isPure, io);
               return;
             }
-            const tileToDiscard = JSON.parse(drawTile);
+            const tileToDiscardRaw = await redis.lindex(HAND_KEY(roomId, nextPlayer.userId), -1);
+            const tileToDiscard = JSON.parse(tileToDiscardRaw);
             io.to(`user:${nextPlayer.userId}`).emit(
               "mahjong:remove_kong_decision",
             );
@@ -4964,7 +4965,8 @@ console.log("IS DECLINED::", isDeclined);
             );
           }
         } else {
-          const tileToDiscard = JSON.parse(drawTile);
+          const tileToDiscardRaw = await redis.lindex(HAND_KEY(roomId, nextPlayer.userId), -1);
+          const tileToDiscard = JSON.parse(tileToDiscardRaw);
           await MahJongRoomManager.discardTile(
             socket,
             {

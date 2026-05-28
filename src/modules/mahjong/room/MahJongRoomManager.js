@@ -3104,12 +3104,7 @@ export default class MahJongRoomManager {
               canPong: pongData.canPong,
               groups: pongData.groups,
             });
-          } else if (!pongData.canPong && chowData.canChow) {
-            io.to(`user:${userId}`).emit("mahjong:can_normal_chow", {
-              canChow: chowData.canChow,
-              groups: chowData.groups,
-            });
-          } else if (!pongData.canPong && !chowData.canChow) {
+          } else {
             io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
             await redis.set(DRAW_STATUS_KEY(roomId), true);
             await MahJongRoomManager.endRound(roomId, io);
@@ -3125,11 +3120,6 @@ export default class MahJongRoomManager {
             io.to(`user:${userId}`).emit("mahjong:can_normal_pong", {
               canPong: pongData.canPong,
               groups: pongData.groups,
-            });
-          } else if (!pongData.canPong && chowData.canChow) {
-            io.to(`user:${userId}`).emit("mahjong:can_normal_chow", {
-              canChow: chowData.canChow,
-              groups: chowData.groups,
             });
           }
         }
@@ -4591,12 +4581,7 @@ console.log("IS DECLINED::", isDeclined);
                 canPong: pongData.canPong,
                 groups: pongData.groups,
               });
-            } else if (!pongData.canPong && chowData.canChow) {
-              io.to(`user:${nextPlayer.userId}`).emit("mahjong:can_normal_chow", {
-                canChow: chowData.canChow,
-                groups: chowData.groups,
-              });
-            } else if (!pongData.canPong && !chowData.canChow) {
+            } else {
               io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
               await redis.set(DRAW_STATUS_KEY(roomId), true);
               await MahJongRoomManager.endRound(roomId, io);
@@ -4613,11 +4598,6 @@ console.log("IS DECLINED::", isDeclined);
                 canPong: pongData.canPong,
                 groups: pongData.groups,
               });
-            } else if (!pongData.canPong && chowData.canChow) {
-              io.to(`user:${nextPlayer.userId}`).emit("mahjong:can_normal_chow", {
-                canChow: chowData.canChow,
-                groups: chowData.groups,
-              });
             }
           }
         }
@@ -4625,7 +4605,7 @@ console.log("IS DECLINED::", isDeclined);
         io.to(`user:${nextPlayer.userId}`).emit("mahjong:ask_win_decision", {message: "You can win by using discarded tile."});
       }
     } else {
-      if (!kongData.canKong && !pongData.canPong && !chowData.canChow) {
+      if (!kongData.canKong && !pongData.canPong) {
         if (wallCount <= 0) {
           io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
           await redis.set(DRAW_STATUS_KEY(roomId), true);
@@ -4767,12 +4747,7 @@ console.log("IS DECLINED::", isDeclined);
               canPong: pongData.canPong,
               groups: pongData.groups,
             });
-          } else if (!pongData.canPong && chowData.canChow) {
-            io.to(`user:${nextPlayer.userId}`).emit("mahjong:can_normal_chow", {
-              canChow: chowData.canChow,
-              groups: chowData.groups,
-            });
-          } else if (!pongData.canPong && !chowData.canChow) {
+          } else {
             io.to(SOCKET_ROOM(roomId)).emit("mahjong:draw_round");
             await redis.set(DRAW_STATUS_KEY(roomId), true);
             await MahJongRoomManager.endRound(roomId, io);
@@ -4788,11 +4763,6 @@ console.log("IS DECLINED::", isDeclined);
             io.to(`user:${nextPlayer.userId}`).emit("mahjong:can_normal_pong", {
               canPong: pongData.canPong,
               groups: pongData.groups,
-            });
-          } else if (!pongData.canPong && chowData.canChow) {
-            io.to(`user:${nextPlayer.userId}`).emit("mahjong:can_normal_chow", {
-              canChow: chowData.canChow,
-              groups: chowData.groups,
             });
           }
         }
@@ -4848,7 +4818,7 @@ console.log("IS DECLINED::", isDeclined);
         io.to(`user:${nextPlayer.userId}`).emit("mahjong:remove_win_decision");
 
         // auto draw and auto discard
-        if (kongData.canKong || pongData.canPong || chowData.canChow) {
+        if (kongData.canKong || pongData.canPong) {
           const current_last_discard_tile_raw = await redis.get(
             LAST_DISCARD_KEY(roomId),
           );

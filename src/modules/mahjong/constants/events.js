@@ -30,6 +30,8 @@ export default {
   ACCEPT_WIN: "mahjong:accept_win",
   PASS_WIN: "mahjong:pass_win",
 
+  TAKE_SHOWN_TILE: "mahjong:take_shown_tile",
+
   ROUND_STARTED: "mahjong:round_started",
 
   ERROR: "mahjong:error",

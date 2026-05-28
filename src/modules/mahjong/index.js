@@ -16,12 +16,8 @@ export default {
   [EVENTS.PASS_NORMAL_KONG]: MahJongRoomManager.passNormalKong,
   [EVENTS.ACCEPT_NORMAL_PONG]: MahJongRoomManager.acceptNormalPong,
   [EVENTS.PASS_NORMAL_PONG]: MahJongRoomManager.passNormalPong,
-  [EVENTS.ACCEPT_NORMAL_CHOW]: MahJongRoomManager.acceptNormalChow,
-  [EVENTS.PASS_NORMAL_CHOW]: MahJongRoomManager.passNormalChow,
+  // REMOVED: ACCEPT_NORMAL_CHOW and PASS_NORMAL_CHOW (no chow from discard in Loukkai Mahjong)
   [EVENTS.ACCEPT_WIN]: MahJongRoomManager.acceptWin,
   [EVENTS.PASS_WIN]: MahJongRoomManager.passWin,
-
-  // temporary
-  ["mahjong:temporary_start_round"]: MahJongRoomManager.temporaryStartRound,
-  ["mahjong:temporary_end_round"]: MahJongRoomManager.temporaryEndRound
+  [EVENTS.TAKE_SHOWN_TILE]: MahJongRoomManager.takeShownTile
 };

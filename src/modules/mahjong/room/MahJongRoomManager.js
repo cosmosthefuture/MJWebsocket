@@ -1745,14 +1745,7 @@ export default class MahJongRoomManager {
 
     const result = await MahJongRoomManager.checkWinningHand(roomId, userId);
     if (result.canWin) {
-      // ask win decision here
-      io.to(`user:${userId}`).emit("mahjong:you_win");
-      await MahJongRoomManager.storeWinningData(roomId, userId);
-      const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-      const winningData = JSON.parse(winningDataRaw);
-      io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-      await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-      await MahJongRoomManager.endRound(roomId, io);
+      await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', result.isPure, io);
       return;
     }
 
@@ -2043,14 +2036,7 @@ export default class MahJongRoomManager {
 
     const result = await MahJongRoomManager.checkWinningHand(roomId, userId);
     if (result.canWin) {
-      // ask win decision here
-      io.to(`user:${userId}`).emit("mahjong:you_win");
-      await MahJongRoomManager.storeWinningData(roomId, userId);
-      const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-      const winningData = JSON.parse(winningDataRaw);
-      io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-      await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-      await MahJongRoomManager.endRound(roomId, io);
+      await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', result.isPure, io);
       return;
     }
 
@@ -2115,17 +2101,11 @@ export default class MahJongRoomManager {
 
   static async passKong(socket, payload, io) {
     const { roomId, userId } = payload;
-    // io.to(`user:${userId}`).emit("mahjong:remove_kong_decision");
     const result = await MahJongRoomManager.checkWinningHand(roomId, userId);
 
     if (result.canWin) {
-      io.to(`user:${userId}`).emit("mahjong:you_win");
-      await this.storeWinningData(roomId, userId);
-      const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-      const winningData = JSON.parse(winningDataRaw);
-      io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-      await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-      await MahJongRoomManager.endRound(roomId, io);
+      // Player passed Kong but can win — handle as self-draw win
+      await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', result.isPure, io);
       return;
     }
   }
@@ -2924,11 +2904,12 @@ export default class MahJongRoomManager {
     }
     // end
 
-    await MahJongRoomManager.storeWinningData(roomId, userId);
-    const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-    const winningData = JSON.parse(winningDataRaw);
-    io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-    await MahJongRoomManager.endRound(roomId, io);
+    // Check if winning hand is pure
+    const winResult = await MahJongRoomManager.checkWinningHand(roomId, userId);
+    const isPure = winResult.isPure || false;
+
+    // Use unified handleWin for left-discard win (with payout calculation)
+    await MahJongRoomManager.handleWin(roomId, userId, 'left-discard', isPure, io);
   }
 
   static async passWin(socket, payload, io)
@@ -3087,14 +3068,7 @@ export default class MahJongRoomManager {
         );
         // console.log("WH In NP: ", winning_hand_result);
         if (winning_hand_result.canWin) {
-          // ask win decision here
-          io.to(`user:${userId}`).emit("mahjong:you_win");
-          await MahJongRoomManager.storeWinningData(roomId, userId);
-          const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-          const winningData = JSON.parse(winningDataRaw);
-          io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-          await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-          await MahJongRoomManager.endRound(roomId, io);
+          await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', winning_hand_result.isPure, io);
           return;
         }
       } else {
@@ -3723,13 +3697,7 @@ export default class MahJongRoomManager {
       userId,
     );
     if (winning_hand_result.canWin) {
-      io.to(`user:${userId}`).emit("mahjong:you_win");
-      await MahJongRoomManager.storeWinningData(roomId, userId);
-      const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-      const winningData = JSON.parse(winningDataRaw);
-      io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-      await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-      await MahJongRoomManager.endRound(roomId, io);
+      await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', winning_hand_result.isPure, io);
       return;
     }
     
@@ -4063,13 +4031,7 @@ export default class MahJongRoomManager {
         userId,
       );
       if (winning_hand_result.canWin) {
-        io.to(`user:${userId}`).emit("mahjong:you_win");
-        await MahJongRoomManager.storeWinningData(roomId, userId);
-        const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-        const winningData = JSON.parse(winningDataRaw);
-        io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-        await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-        await MahJongRoomManager.endRound(roomId, io);
+        await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', winning_hand_result.isPure, io);
         return;
       }
     }
@@ -4199,13 +4161,7 @@ export default class MahJongRoomManager {
       userId,
     );
     if (winning_hand_result.canWin) {
-      io.to(`user:${userId}`).emit("mahjong:you_win");
-      await MahJongRoomManager.storeWinningData(roomId, userId);
-      const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-      const winningData = JSON.parse(winningDataRaw);
-      io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-      await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-      await MahJongRoomManager.endRound(roomId, io);
+      await MahJongRoomManager.handleWin(roomId, userId, 'self-draw', winning_hand_result.isPure, io);
       return;
     }
   }
@@ -4565,13 +4521,7 @@ console.log("IS DECLINED::", isDeclined);
           // console.log("WH In NP: ", winning_hand_result);
           if (winning_hand_result.canWin) {
             // ask win decision here
-            io.to(`user:${nextPlayer.userId}`).emit("mahjong:you_win");
-            await MahJongRoomManager.storeWinningData(roomId, nextPlayer.userId);
-            const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-            const winningData = JSON.parse(winningDataRaw);
-            io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-            await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-            await MahJongRoomManager.endRound(roomId, io);
+            await MahJongRoomManager.handleWin(roomId, nextPlayer.userId, 'self-draw', checkWinResult.isPure || false, io);
             return;
           }
         } else {
@@ -4731,13 +4681,7 @@ console.log("IS DECLINED::", isDeclined);
         // console.log("WH In NP: ", winning_hand_result);
         if (winning_hand_result.canWin) {
           // ask win decision here
-          io.to(`user:${nextPlayer.userId}`).emit("mahjong:you_win");
-          await MahJongRoomManager.storeWinningData(roomId, nextPlayer.userId);
-          const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-          const winningData = JSON.parse(winningDataRaw);
-          io.to(SOCKET_ROOM(roomId)).emit("mahjong:winner_reveal", winningData);
-          await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-          await MahJongRoomManager.endRound(roomId, io);
+          await MahJongRoomManager.handleWin(roomId, nextPlayer.userId, 'self-draw', checkWinResult.isPure || false, io);
           return;
         }
       } else {
@@ -4963,20 +4907,7 @@ console.log("IS DECLINED::", isDeclined);
                 nextPlayer.userId,
               );
             if (winning_hand_result.canWin) {
-              // ask win decision here
-              io.to(`user:${nextPlayer.userId}`).emit("mahjong:you_win");
-              await MahJongRoomManager.storeWinningData(
-                roomId,
-                nextPlayer.userId,
-              );
-              const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-              const winningData = JSON.parse(winningDataRaw);
-              io.to(SOCKET_ROOM(roomId)).emit(
-                "mahjong:winner_reveal",
-                winningData,
-              );
-              await redis.del(TURN_COUNTDOWN_END_KEY(roomId));
-              await MahJongRoomManager.endRound(roomId, io);
+              await MahJongRoomManager.handleWin(roomId, nextPlayer.userId, 'self-draw', winning_hand_result.isPure, io);
               return;
             }
             const tileToDiscard = JSON.parse(drawTile);

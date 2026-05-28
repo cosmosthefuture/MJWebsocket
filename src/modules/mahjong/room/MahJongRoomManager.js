@@ -2677,23 +2677,39 @@ export default class MahJongRoomManager {
      * =====================================
      * 6. Handle win decision timeout
      * If left player was offered win, wait for decision
+     * 
+     * Two cases:
+     * - Left player is NOT the next turn player → wait 3s, auto-decline if no response
+     * - Left player IS the next turn player → do NOT auto-decline, let startNextTurn handle it
      * =====================================
      */
-    if(winnerExist) {
-      await MahJongRoomManager.wait(3000);
-    }
-    
-    const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
-    if(winningDataRaw) {
-      return;
-    } else {
-      // If left player declined win, mark them as declined
-      if (winnerExist && leftPlayer) {
+    if (winnerExist && leftPlayer) {
+      const leftPlayerIsNextTurn = Number(leftPlayer.userId) === Number(nextPlayer.userId);
+      
+      if (!leftPlayerIsNextTurn) {
+        // Left player is NOT next turn → wait 3s then auto-decline
+        await MahJongRoomManager.wait(3000);
+        
+        const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
+        if (winningDataRaw) {
+          // Player accepted win during the 3s wait
+          return;
+        }
+        
+        // Player didn't respond → mark as declined
         await redis.sadd(
           WIN_DECLINE_PLAYER_IDS_KEY(roomId),
           leftPlayer.userId,
         );
         io.to(`user:${leftPlayer.userId}`).emit("mahjong:remove_win_decision");
+      } else {
+        // Left player IS next turn player → don't auto-decline
+        // startNextTurn will check WIN_DECLINE_PLAYER_IDS_KEY and re-ask if not declined
+        // Just check if they already accepted during this brief moment
+        const winningDataRaw = await redis.get(WINNING_DATA_KEY(roomId));
+        if (winningDataRaw) {
+          return;
+        }
       }
     }
 

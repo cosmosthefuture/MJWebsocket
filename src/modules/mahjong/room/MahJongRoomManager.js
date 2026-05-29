@@ -5374,20 +5374,21 @@ console.log("IS DECLINED::", isDeclined);
     else if (winType === 'shown-tile') {
       // Shown tile win
       if (!isPure) {
-        // Normal shown tile: all pay 3×
+        // Normal shown tile (non-pure): all pay 10×
         for (const player of roundPlayers) {
           if (player.userId !== winnerId) {
             payouts.push({
               winner: winner,
               payer: player,
-              amount: betAmount * 3
+              amount: betAmount * 10
             });
           }
         }
       } else {
-        // Pure shown tile: consecutive multiplier = 10 × 2^(N-1)
+        // Pure shown tile: consecutive multiplier = 20 × 2^(N-1)
+        // First time: 20×, Second: 40×, Third: 80×, Fourth: 160×
         const N = consecutiveCount || 1;
-        const multiplier = 10 * Math.pow(2, N - 1);
+        const multiplier = 20 * Math.pow(2, N - 1);
         
         for (const player of roundPlayers) {
           if (player.userId !== winnerId) {

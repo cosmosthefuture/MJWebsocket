@@ -773,20 +773,23 @@ export default class MahJongRoomManager {
     const kongData = await redis.lrange(KONG_KEY(roomId, userId), 0, -1);
     console.log(`[takeShownTile] Kong count for user ${userId}:`, kongData.length);
     if (kongData.length === 0) {
-      throw new Error('Must have Kong to take shown tile');
+      io.to(`user:${userId}`).emit("mahjong:error", { message: "Must have Kong to take shown tile" });
+      return;
     }
 
     // 2. Get shown tiles
     const shownTilesRaw = await redis.get(SHOWN_TILES_KEY(roomId));
     if (!shownTilesRaw) {
-      throw new Error('No shown tiles available');
+      io.to(`user:${userId}`).emit("mahjong:error", { message: "No shown tiles available" });
+      return;
     }
     
     const shownTiles = JSON.parse(shownTilesRaw);
     
     // 3. Validate tileIndex
     if (tileIndex < 0 || tileIndex >= shownTiles.length) {
-      throw new Error('Invalid tile index');
+      io.to(`user:${userId}`).emit("mahjong:error", { message: "Invalid tile index" });
+      return;
     }
 
     // 4. Take selected tile
@@ -794,12 +797,13 @@ export default class MahJongRoomManager {
 
     // 5. Replace with new tile from wall
     const newTileRaw = await redis.lpop(WALL_KEY(roomId));
-    if (!newTileRaw) {
-      throw new Error('Wall is empty, cannot replace shown tile');
+    if (newTileRaw) {
+      const newTile = JSON.parse(newTileRaw);
+      shownTiles[tileIndex] = newTile;
+    } else {
+      // Wall empty - just remove the tile from shown tiles
+      shownTiles.splice(tileIndex, 1);
     }
-    
-    const newTile = JSON.parse(newTileRaw);
-    shownTiles[tileIndex] = newTile;
 
     // 6. Update SHOWN_TILES_KEY with new tile
     await redis.set(SHOWN_TILES_KEY(roomId), JSON.stringify(shownTiles));

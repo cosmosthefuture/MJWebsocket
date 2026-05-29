@@ -10,7 +10,7 @@ class EventDispatcher {
     };
   }
 
-  dispatch(socket, event, payload, io) {
+  async dispatch(socket, event, payload, io) {
     try {
       logger.info({
         type: "SOCKET",
@@ -32,7 +32,7 @@ class EventDispatcher {
         return;
       }
 
-      handler(socket, payload, io);
+      await handler(socket, payload, io);
 
     } catch (err) {
       logger.error({
@@ -42,6 +42,7 @@ class EventDispatcher {
         userId: socket.user?.id,
         socketId: socket.id,
         error: err.message,
+        stack: err.stack,
       });
 
       socket.emit("error", { message: err.message });

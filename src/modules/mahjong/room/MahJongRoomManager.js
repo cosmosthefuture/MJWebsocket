@@ -934,17 +934,16 @@ export default class MahJongRoomManager {
 
     // 13. Clear the waiting for shown tile decision state
     await redis.del(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
-    console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win...`);
+    console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win and kong...`);
     
     // 14. Check if player can win with the taken shown tile
-    let winResult = { canWin: false };
-    try {
-      winResult = await this.checkWinningHand(roomId, userId);
-      console.log(`[takeShownTile] Win check result:`, winResult.canWin);
-    } catch (err) {
-      console.error(`[takeShownTile] Win check error:`, err.message);
-    }
+    const winResult = await this.checkWinningHand(roomId, userId);
+    console.log(`[takeShownTile] Win check:`, winResult.canWin);
     
+    // 15. Check if another Kong is possible with the new tile
+    const newKongData = await this.checkKongExist(roomId, userId);
+    console.log(`[takeShownTile] Kong check:`, newKongData.canKong, newKongData.groups?.map(g => g.tileKey));
+
     if (winResult.canWin) {
       // Emit ask_win_decision - let player decide
       io.to(`user:${userId}`).emit("mahjong:ask_win_decision", {
@@ -954,14 +953,6 @@ export default class MahJongRoomManager {
       });
     }
     
-    // Check if another Kong is possible (emit regardless of win - player may pass win and kong instead)
-    let newKongData = { canKong: false, groups: [] };
-    try {
-      newKongData = await this.checkKongExist(roomId, userId);
-      console.log(`[takeShownTile] Kong check result:`, newKongData.canKong, newKongData.groups?.length);
-    } catch (err) {
-      console.error(`[takeShownTile] Kong check error:`, err.message);
-    }
     if (newKongData.canKong) {
       io.to(`user:${userId}`).emit('mahjong:can_kong', {
         canKong: true,

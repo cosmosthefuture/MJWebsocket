@@ -1282,12 +1282,17 @@ export default class MahJongRoomManager {
 
     const countdownInterval = setInterval(async () => {
       const winningDataExist = await redis.get(WINNING_DATA_KEY(roomId));
+      if (winningDataExist) {
+        clearInterval(countdownInterval);
+        return;
+      }
       const alreadyDiscardedRaw = await redis.get(LAST_DISCARD_KEY(roomId));
       const alreadyDiscarded = alreadyDiscardedRaw
         ? JSON.parse(alreadyDiscardedRaw)
         : null;
-      if (winningDataExist || alreadyDiscarded?.discard_by == userId) {
-        remaining = 0;
+      if (alreadyDiscarded?.discard_by == userId) {
+        clearInterval(countdownInterval);
+        return;
       }
       remaining--;
 
@@ -1783,12 +1788,17 @@ export default class MahJongRoomManager {
 
     const countdownInterval = setInterval(async () => {
       const winningDataExist = await redis.get(WINNING_DATA_KEY(roomId));
+      if (winningDataExist) {
+        clearInterval(countdownInterval);
+        return;
+      }
       const alreadyDiscardedRaw = await redis.get(LAST_DISCARD_KEY(roomId));
       const alreadyDiscarded = alreadyDiscardedRaw
         ? JSON.parse(alreadyDiscardedRaw)
         : null;
-      if (winningDataExist || alreadyDiscarded?.discard_by == userId) {
-        remaining = 0;
+      if (alreadyDiscarded?.discard_by == userId) {
+        clearInterval(countdownInterval);
+        return;
       }
       remaining--;
 
@@ -2085,12 +2095,17 @@ export default class MahJongRoomManager {
 
     const countdownInterval = setInterval(async () => {
       const winningDataExist = await redis.get(WINNING_DATA_KEY(roomId));
+      if (winningDataExist) {
+        clearInterval(countdownInterval);
+        return;
+      }
       const alreadyDiscardedRaw = await redis.get(LAST_DISCARD_KEY(roomId));
       const alreadyDiscarded = alreadyDiscardedRaw
         ? JSON.parse(alreadyDiscardedRaw)
         : null;
-      if (winningDataExist || alreadyDiscarded?.discard_by == userId) {
-        remaining = 0;
+      if (alreadyDiscarded?.discard_by == userId) {
+        clearInterval(countdownInterval);
+        return;
       }
       remaining--;
 

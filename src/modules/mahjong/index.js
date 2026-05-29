@@ -20,6 +20,7 @@ export default {
   [EVENTS.ACCEPT_WIN]: MahJongRoomManager.acceptWin,
   [EVENTS.PASS_WIN]: MahJongRoomManager.passWin,
   [EVENTS.TAKE_SHOWN_TILE]: MahJongRoomManager.takeShownTile,
+  [EVENTS.PASS_SHOWN_TILE]: MahJongRoomManager.passShownTile,
   [EVENTS.START_ROUND]: MahJongRoomManager.startRoundRequest,
   ["mahjong:temporary_start_round"]: MahJongRoomManager.startRoundRequest
 };

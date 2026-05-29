@@ -31,6 +31,7 @@ export default {
   PASS_WIN: "mahjong:pass_win",
 
   TAKE_SHOWN_TILE: "mahjong:take_shown_tile",
+  PASS_SHOWN_TILE: "mahjong:pass_shown_tile",
 
   START_ROUND: "mahjong:start_round",
 

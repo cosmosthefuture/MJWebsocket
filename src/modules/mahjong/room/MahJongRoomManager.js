@@ -767,9 +767,11 @@ export default class MahJongRoomManager {
   // ================= TAKE SHOWN TILE =================
   static async takeShownTile(socket, payload, io) {
     const { roomId, userId, tileIndex } = payload;
+    console.log(`[takeShownTile] Called with roomId:${roomId}, userId:${userId}, tileIndex:${tileIndex}`);
 
     // 1. Validate player has at least one Kong
     const kongData = await redis.lrange(KONG_KEY(roomId, userId), 0, -1);
+    console.log(`[takeShownTile] Kong count for user ${userId}:`, kongData.length);
     if (kongData.length === 0) {
       throw new Error('Must have Kong to take shown tile');
     }
@@ -804,6 +806,7 @@ export default class MahJongRoomManager {
 
     // 7. Add taken tile to player's hand
     await redis.rpush(HAND_KEY(roomId, userId), JSON.stringify(takenTile));
+    console.log(`[takeShownTile] Added tile to hand:`, takenTile, `for user:`, userId);
 
     // 8. Increment SHOWN_TILES_TAKEN_THIS_TURN_KEY counter
     await redis.incr(SHOWN_TILES_TAKEN_THIS_TURN_KEY(roomId, userId));
@@ -927,6 +930,7 @@ export default class MahJongRoomManager {
 
     // 13. Clear the waiting for shown tile decision state
     await redis.del(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
+    console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win...`);
     
     // 14. Check if player can win with the taken shown tile
     const winResult = await this.checkWinningHand(roomId, userId);
@@ -1814,15 +1818,25 @@ export default class MahJongRoomManager {
           !already_discard_tile_raw ||
           already_discard_tile?.discard_by !== userId
         ) {
-          await MahJongRoomManager.discardTile(
-            socket,
-            {
-              roomId: roomId,
-              userId: userId,
-              tileId: drawTile.id,
-            },
-            io,
-          );
+          // Auto-pass shown tile if still waiting
+          const waitingDecision = await redis.get(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
+          if (waitingDecision) {
+            await MahJongRoomManager.passShownTile(socket, { roomId, userId }, io);
+          }
+          // Discard last tile from hand
+          const lastTileRaw = await redis.lindex(HAND_KEY(roomId, userId), -1);
+          if (lastTileRaw) {
+            const lastTile = JSON.parse(lastTileRaw);
+            await MahJongRoomManager.discardTile(
+              socket,
+              {
+                roomId: roomId,
+                userId: userId,
+                tileId: lastTile.id,
+              },
+              io,
+            );
+          }
         }
       }
     }, 1000);
@@ -6429,7 +6443,13 @@ console.log("IS DECLINED::", isDeclined);
     // Offer shown tiles to the player
     const kongCount = await redis.llen(KONG_KEY(roomId, userId));
     if (kongCount > 0) {
-      const shownTilesRaw = await redis.get(SHOWN_TILES_KEY(roomId));
+      let shownTilesRaw = await redis.get(SHOWN_TILES_KEY(roomId));
+      
+      // If shown tiles haven't been revealed yet, reveal them now
+      if (!shownTilesRaw) {
+        await MahJongRoomManager.revealShownTiles(roomId, io);
+        shownTilesRaw = await redis.get(SHOWN_TILES_KEY(roomId));
+      }
       
       if (shownTilesRaw) {
         const shownTiles = JSON.parse(shownTilesRaw);

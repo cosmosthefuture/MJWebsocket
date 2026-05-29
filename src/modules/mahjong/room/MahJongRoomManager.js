@@ -937,7 +937,13 @@ export default class MahJongRoomManager {
     console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win...`);
     
     // 14. Check if player can win with the taken shown tile
-    const winResult = await this.checkWinningHand(roomId, userId);
+    let winResult = { canWin: false };
+    try {
+      winResult = await this.checkWinningHand(roomId, userId);
+      console.log(`[takeShownTile] Win check result:`, winResult.canWin);
+    } catch (err) {
+      console.error(`[takeShownTile] Win check error:`, err.message);
+    }
     
     if (winResult.canWin) {
       // Emit ask_win_decision - let player decide
@@ -949,12 +955,19 @@ export default class MahJongRoomManager {
     }
     
     // Check if another Kong is possible (emit regardless of win - player may pass win and kong instead)
-    const newKongData = await this.checkKongExist(roomId, userId);
+    let newKongData = { canKong: false, groups: [] };
+    try {
+      newKongData = await this.checkKongExist(roomId, userId);
+      console.log(`[takeShownTile] Kong check result:`, newKongData.canKong, newKongData.groups?.length);
+    } catch (err) {
+      console.error(`[takeShownTile] Kong check error:`, err.message);
+    }
     if (newKongData.canKong) {
       io.to(`user:${userId}`).emit('mahjong:can_kong', {
         canKong: true,
         groups: newKongData.groups,
       });
+      console.log(`[takeShownTile] Emitted can_kong to user:${userId}`);
     }
 
     // Player now waits for discard (countdown is already running)

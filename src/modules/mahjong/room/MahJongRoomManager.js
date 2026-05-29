@@ -948,9 +948,9 @@ export default class MahJongRoomManager {
       });
     }
     
-    // Check if another Kong is possible
+    // Check if another Kong is possible (emit regardless of win - player may pass win and kong instead)
     const newKongData = await this.checkKongExist(roomId, userId);
-    if (newKongData.canKong && !winResult.canWin) {
+    if (newKongData.canKong) {
       io.to(`user:${userId}`).emit('mahjong:can_kong', {
         canKong: true,
         groups: newKongData.groups,
@@ -2918,6 +2918,20 @@ export default class MahJongRoomManager {
       io.to(`user:${userId}`).emit("mahjong:remove_win_decision");
 
       const discardTileRaw = await redis.get(LAST_DISCARD_KEY(roomId));
+
+      // If no discard tile exists, the win was from a shown tile or self-draw
+      // Just check for kong from hand and let player continue their turn
+      if (!discardTileRaw) {
+        const kongFromHandData = await MahJongRoomManager.checkKongExist(roomId, userId);
+        if (kongFromHandData.canKong) {
+          io.to(`user:${userId}`).emit('mahjong:can_kong', {
+            canKong: true,
+            groups: kongFromHandData.groups,
+          });
+        }
+        return;
+      }
+
       const discardTileData = JSON.parse(discardTileRaw);
       const discardTile = discardTileData.tile;
       const discardedUserId = discardTileData.discard_by;

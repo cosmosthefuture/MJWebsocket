@@ -947,13 +947,18 @@ export default class MahJongRoomManager {
     await redis.del(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
     console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win and kong...`);
     
-    // 14. Check if player can win with the taken shown tile
-    const winResult = await this.checkWinningHand(roomId, userId);
-    console.log(`[takeShownTile] Win check:`, winResult.canWin);
-    
-    // 15. Check if another Kong is possible with the new tile
+    // 14. Check if another Kong is possible with the new tile (check FIRST from HAND_KEY)
     const newKongData = await this.checkKongExist(roomId, userId);
     console.log(`[takeShownTile] Kong check:`, newKongData.canKong, newKongData.groups?.map(g => g.tileKey));
+
+    // 15. Check if player can win with the taken shown tile
+    let winResult = { canWin: false };
+    try {
+      winResult = await this.checkWinningHand(roomId, userId);
+    } catch (err) {
+      console.error(`[takeShownTile] Win check error:`, err.message);
+    }
+    console.log(`[takeShownTile] Win check:`, winResult.canWin);
 
     if (winResult.canWin) {
       // Emit ask_win_decision - let player decide

@@ -4354,6 +4354,81 @@ export default class MahJongRoomManager {
     // }
     // temporary codes. delete later
 
+    // ========== TEMPORARY TEST CODE: SELF-DRAW PURE HAND WIN (2nd turn player) ==========
+    // Test scenario (3 players):
+    // - Second turn player has 13 pure bamboo tiles, needs bamboo 9 to win
+    // - Winning tile (bamboo 9) is injected at front of wall
+    // - After first player discards, second player draws bamboo 9 → pure hand self-draw win
+    // TO REMOVE: Delete everything between "TEMPORARY TEST CODE" markers
+    const testSecondPlayerTiles = [
+      // Meld 1: bamboo 1, 2, 3 (sequence)
+      { id: 8801, type: "bamboo", number: 1, copy_no: 1 },
+      { id: 8802, type: "bamboo", number: 2, copy_no: 1 },
+      { id: 8803, type: "bamboo", number: 3, copy_no: 1 },
+      // Meld 2: bamboo 4, 5, 6 (sequence)
+      { id: 8804, type: "bamboo", number: 4, copy_no: 1 },
+      { id: 8805, type: "bamboo", number: 5, copy_no: 1 },
+      { id: 8806, type: "bamboo", number: 6, copy_no: 1 },
+      // Meld 3: bamboo 7, 7, 7 (triplet)
+      { id: 8807, type: "bamboo", number: 7, copy_no: 1 },
+      { id: 8808, type: "bamboo", number: 7, copy_no: 2 },
+      { id: 8809, type: "bamboo", number: 7, copy_no: 3 },
+      // Meld 4: bamboo 8, 8, 8 (triplet)
+      { id: 8810, type: "bamboo", number: 8, copy_no: 1 },
+      { id: 8811, type: "bamboo", number: 8, copy_no: 2 },
+      { id: 8812, type: "bamboo", number: 8, copy_no: 3 },
+      // Pair (incomplete): bamboo 9 (needs one more bamboo 9 from wall to win)
+      { id: 8813, type: "bamboo", number: 9, copy_no: 1 },
+    ];
+
+    // Replace second player's hand with test tiles
+    await redis.del(HAND_KEY(roomId, nextPlayer.userId));
+    for (const tile of testSecondPlayerTiles) {
+      await redis.rpush(HAND_KEY(roomId, nextPlayer.userId), JSON.stringify(tile));
+    }
+
+    // Inject winning tile (bamboo 9) at front of wall so it's the next tile drawn
+    const winningWallTile = { id: 8850, type: "bamboo", number: 9, copy_no: 2 };
+    await redis.lpush(WALL_KEY(roomId), JSON.stringify(winningWallTile));
+
+    // Rebuild player view for second player with test tiles
+    const roundPlayersRawT = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
+    const playersT = Object.values(roundPlayersRawT).map(JSON.parse).sort((a, b) => a.seat - b.seat);
+
+    for (const currentPlayer of playersT) {
+      const handState = [];
+      for (const targetPlayer of playersT) {
+        const rawPlayerTiles = await redis.lrange(HAND_KEY(roomId, targetPlayer.userId), 0, -1);
+        const parsedTiles = rawPlayerTiles.map((tile) => JSON.parse(tile));
+        const rawKong = await redis.lrange(KONG_KEY(roomId, targetPlayer.userId), 0, -1);
+        const rawPong = await redis.lrange(PONG_KEY(roomId, targetPlayer.userId), 0, -1);
+        const rawChow = await redis.lrange(CHOW_KEY(roomId, targetPlayer.userId), 0, -1);
+        const kongDataT = rawKong.map((item) => JSON.parse(item));
+        const pongDataT = rawPong.map((item) => JSON.parse(item));
+        const chowDataT = rawChow.map((item) => JSON.parse(item));
+        const ownDiscardTilesRaw = await redis.lrange(PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId), 0, -1);
+        const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
+        if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
+          handState.push({
+            last_discard_tile: null, pong: pongDataT, chow: chowDataT, kong: kongDataT,
+            discarded_tiles: ownDiscardTiles, userId: targetPlayer.userId, user_name: targetPlayer.name,
+            isSelf: true, seat_position: targetPlayer.seat, tileCount: parsedTiles.length, tiles: parsedTiles,
+          });
+        } else {
+          handState.push({
+            last_discard_tile: null, pong: pongDataT, chow: chowDataT, kong: kongDataT,
+            discarded_tiles: ownDiscardTiles, userId: targetPlayer.userId, user_name: targetPlayer.name,
+            isSelf: false, seat_position: targetPlayer.seat, tileCount: parsedTiles.length,
+            tiles: Array.from({ length: parsedTiles.length }, () => ({ id: null, type: "hidden", number: null, copy_no: null })),
+          });
+        }
+      }
+      await redis.set(PLAYER_VIEW_HAND_KEY(roomId, currentPlayer.userId), JSON.stringify(handState));
+      io.to(`user:${currentPlayer.userId}`).emit("mahjong:initial_hand_state", handState);
+    }
+    // ========== END TEMPORARY TEST CODE ==========
+
     // check kong
     const kongData = await MahJongRoomManager.checkKongUsingDiscard(
       roomId,

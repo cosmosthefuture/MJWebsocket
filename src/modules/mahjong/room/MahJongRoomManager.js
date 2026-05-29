@@ -6159,6 +6159,12 @@ console.log("IS DECLINED::", isDeclined);
     await this.clearRoomData(roomId, io);
   }
 
+  // ================= TEMPORARY END ROUND =================
+  static async temporaryEndRound(socket, payload, io) {
+    const { roomId } = payload;
+    await MahJongRoomManager.endRound(roomId, io);
+  }
+
   // ================= Temporary Function =================
   static async clearRoomData(roomId, io) {
     /**

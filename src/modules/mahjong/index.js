@@ -22,5 +22,6 @@ export default {
   [EVENTS.TAKE_SHOWN_TILE]: MahJongRoomManager.takeShownTile,
   [EVENTS.PASS_SHOWN_TILE]: MahJongRoomManager.passShownTile,
   [EVENTS.START_ROUND]: MahJongRoomManager.startRoundRequest,
-  ["mahjong:temporary_start_round"]: MahJongRoomManager.startRoundRequest
+  ["mahjong:temporary_start_round"]: MahJongRoomManager.startRoundRequest,
+  ["mahjong:temporary_end_round"]: MahJongRoomManager.temporaryEndRound
 };

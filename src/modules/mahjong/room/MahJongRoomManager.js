@@ -4697,8 +4697,17 @@ console.log("IS DECLINED::", isDeclined);
         // console.log("WH In NP: ", winning_hand_result);
         if (winning_hand_result.canWin) {
           // ask win decision here
-          await MahJongRoomManager.handleWin(roomId, nextPlayer.userId, 'self-draw', checkWinResult.isPure || false, io);
+          await MahJongRoomManager.handleWin(roomId, nextPlayer.userId, 'self-draw', winning_hand_result.isPure || false, io);
           return;
+        }
+
+        // Check if kong from hand is possible after drawing
+        const kongFromHandData = await MahJongRoomManager.checkKongExist(roomId, nextPlayer.userId);
+        if (kongFromHandData.canKong) {
+          io.to(`user:${nextPlayer.userId}`).emit("mahjong:can_kong", {
+            canKong: true,
+            groups: kongFromHandData.groups,
+          });
         }
       } else {
         if (wallCount <= 0) {

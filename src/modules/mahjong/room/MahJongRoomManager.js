@@ -811,6 +811,17 @@ export default class MahJongRoomManager {
     // 7. Add taken tile to player's hand
     await redis.rpush(HAND_KEY(roomId, userId), JSON.stringify(takenTile));
     console.log(`[takeShownTile] Added tile to hand:`, takenTile, `for user:`, userId);
+    
+    // Debug: verify hand contents after adding tile
+    const debugHandTiles = await redis.lrange(HAND_KEY(roomId, userId), 0, -1);
+    const debugParsed = debugHandTiles.map(t => JSON.parse(t));
+    const debugMap = {};
+    for (const t of debugParsed) {
+      const k = `${t.type}_${t.number}`;
+      debugMap[k] = (debugMap[k] || 0) + 1;
+    }
+    const debugKongKeys = Object.entries(debugMap).filter(([k, v]) => v >= 4).map(([k]) => k);
+    console.log(`[takeShownTile] Hand tile count: ${debugParsed.length}, possible kongs:`, debugKongKeys);
 
     // 8. Increment SHOWN_TILES_TAKEN_THIS_TURN_KEY counter
     await redis.incr(SHOWN_TILES_TAKEN_THIS_TURN_KEY(roomId, userId));

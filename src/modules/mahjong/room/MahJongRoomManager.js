@@ -1141,7 +1141,8 @@ export default class MahJongRoomManager {
     // 2. Take shown tile bamboo3 -> hand: dot1,2,3 + dot4,5,6 + bamboo7,8,9 + bamboo3,3
     //    Win: seq(dot1,2,3) + seq(dot4,5,6) + seq(bamboo7,8,9) + pair(bamboo3,3) (NON-PURE)
     // 3. Accept win -> payout (shown-tile + non-pure = 10x)
-    // TO REMOVE: Delete everything between "TEMPORARY TEST CODE" markers
+    // TO UNCOMMENT: Remove the /* */ block comments to activate this test
+    /*
     const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
     const firstPlayerData = firstPlayerRaw ? JSON.parse(firstPlayerRaw) : null;
     const roundPlayersRawTest = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
@@ -1229,6 +1230,7 @@ export default class MahJongRoomManager {
         await MahJongRoomManager.revealShownTiles(roomId, io);
       }
     }
+    */
     // ========== END TEMPORARY TEST CODE ==========
 
     const duration = 30;

@@ -1118,11 +1118,19 @@ export default class MahJongRoomManager {
 
     await redis.set(ROOM_PLAYING_PHASE_KEY(roomId), "waiting_discard");
 
-    // ========== TEMPORARY TEST CODE: LEFT-DISCARD PURE HAND WIN ==========
-    // Test scenario (3 players):
-    // - First player has bamboo 9 as last tile to discard
-    // - Second player has 13 pure bamboo tiles, needs bamboo 9 to win
-    // - First player discards bamboo 9 → second player can win with discard (left-discard pure hand)
+    // ========== TEMPORARY TEST CODE: KONG > SHOWN TILE WIN > PASS > KONG AGAIN > SHOWN TILE WIN ==========
+    // Test scenario (3 players, first player):
+    // Hand: 4x bamboo1 (kong) + 3x bamboo2 + bamboo3,4 + bamboo5,6,7 + bamboo8,8
+    // Flow:
+    // 1. Accept kong (bamboo1) -> afterKong -> shown tiles [bamboo2, bamboo5]
+    // 2. Take shown tile bamboo2 -> hand: 4x bamboo2 + bamboo3,4 + bamboo5,6,7 + bamboo8,8
+    //    Win: seq(2,3,4) + triplet(2,2,2) + seq(5,6,7) + pair(8,8) -> ask_win_decision
+    // 3. Pass win -> check kong: 4x bamboo2 -> can_kong
+    // 4. Accept kong (bamboo2) -> afterKong -> shown tiles [bamboo5, ...]
+    //    (first shown tile was replaced when bamboo2 was taken, new tile = bamboo5)
+    // 5. Take shown tile bamboo5 -> hand: bamboo3,4 + bamboo5,5,6,7 + bamboo8,8
+    //    Win: seq(3,4,5) + seq(5,6,7) + pair(8,8) -> ask_win_decision (2 kongs, need 2 melds+pair)
+    // 6. Accept win -> payout (shown-tile + pure bamboo)
     // TO REMOVE: Delete everything between "TEMPORARY TEST CODE" markers
     const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
     const firstPlayerData = firstPlayerRaw ? JSON.parse(firstPlayerRaw) : null;
@@ -1135,23 +1143,26 @@ export default class MahJongRoomManager {
       const firstUserId = firstPlayerData.user_id;
 
       if (String(userId) === String(firstUserId)) {
-        // === FIRST PLAYER HAND: has bamboo 9 as last tile to discard ===
         const testTilesUser1 = [
-          { id: 9901, type: "dot", number: 1, copy_no: 1 },
-          { id: 9902, type: "dot", number: 2, copy_no: 1 },
-          { id: 9903, type: "dot", number: 3, copy_no: 1 },
-          { id: 9904, type: "dot", number: 4, copy_no: 1 },
-          { id: 9905, type: "dot", number: 5, copy_no: 1 },
-          { id: 9906, type: "dot", number: 6, copy_no: 1 },
-          { id: 9907, type: "dot", number: 7, copy_no: 1 },
-          { id: 9908, type: "dot", number: 8, copy_no: 1 },
-          { id: 9909, type: "dot", number: 9, copy_no: 1 },
-          { id: 9910, type: "dot", number: 1, copy_no: 2 },
-          { id: 9911, type: "dot", number: 2, copy_no: 2 },
-          { id: 9912, type: "dot", number: 3, copy_no: 2 },
-          { id: 9913, type: "dot", number: 4, copy_no: 2 },
-          // Last tile: bamboo 9 - discard this to let second player win
-          { id: 9914, type: "bamboo", number: 9, copy_no: 4 },
+          // 4x bamboo 1 (first kong)
+          { id: 9901, type: "bamboo", number: 1, copy_no: 1 },
+          { id: 9902, type: "bamboo", number: 1, copy_no: 2 },
+          { id: 9903, type: "bamboo", number: 1, copy_no: 3 },
+          { id: 9904, type: "bamboo", number: 1, copy_no: 4 },
+          // 3x bamboo 2 (becomes 4 after taking shown tile bamboo2 -> second kong)
+          { id: 9905, type: "bamboo", number: 2, copy_no: 1 },
+          { id: 9906, type: "bamboo", number: 2, copy_no: 2 },
+          { id: 9907, type: "bamboo", number: 2, copy_no: 3 },
+          // bamboo 3, 4 (part of seq 2,3,4 for first win / seq 3,4,5 for second win)
+          { id: 9908, type: "bamboo", number: 3, copy_no: 1 },
+          { id: 9909, type: "bamboo", number: 4, copy_no: 1 },
+          // bamboo 5, 6, 7 (sequence)
+          { id: 9910, type: "bamboo", number: 5, copy_no: 1 },
+          { id: 9911, type: "bamboo", number: 6, copy_no: 1 },
+          { id: 9912, type: "bamboo", number: 7, copy_no: 1 },
+          // bamboo 8, 8 (pair)
+          { id: 9913, type: "bamboo", number: 8, copy_no: 1 },
+          { id: 9914, type: "bamboo", number: 8, copy_no: 2 },
         ];
 
         await redis.del(HAND_KEY(roomId, firstUserId));
@@ -1159,35 +1170,18 @@ export default class MahJongRoomManager {
           await redis.rpush(HAND_KEY(roomId, firstUserId), JSON.stringify(tile));
         }
 
-        // === SECOND PLAYER: 13 pure bamboo tiles, needs bamboo 9 to win ===
-        const secondPlayer = playersTest.find(p => String(p.userId) !== String(firstUserId));
-        if (secondPlayer) {
-          const testTilesUser2 = [
-            // Meld 1: bamboo 1, 2, 3
-            { id: 8801, type: "bamboo", number: 1, copy_no: 1 },
-            { id: 8802, type: "bamboo", number: 2, copy_no: 1 },
-            { id: 8803, type: "bamboo", number: 3, copy_no: 1 },
-            // Meld 2: bamboo 4, 5, 6
-            { id: 8804, type: "bamboo", number: 4, copy_no: 1 },
-            { id: 8805, type: "bamboo", number: 5, copy_no: 1 },
-            { id: 8806, type: "bamboo", number: 6, copy_no: 1 },
-            // Meld 3: bamboo 7, 7, 7
-            { id: 8807, type: "bamboo", number: 7, copy_no: 1 },
-            { id: 8808, type: "bamboo", number: 7, copy_no: 2 },
-            { id: 8809, type: "bamboo", number: 7, copy_no: 3 },
-            // Meld 4: bamboo 8, 8, 8
-            { id: 8810, type: "bamboo", number: 8, copy_no: 1 },
-            { id: 8811, type: "bamboo", number: 8, copy_no: 2 },
-            { id: 8812, type: "bamboo", number: 8, copy_no: 3 },
-            // Pair (incomplete): bamboo 9 - needs one more bamboo 9 from discard
-            { id: 8813, type: "bamboo", number: 9, copy_no: 1 },
-          ];
+        // Inject shown tiles into wall: bamboo2 first, bamboo5 second
+        // revealShownTiles pops from left, so lpush in reverse order
+        const shownTile2 = { id: 9951, type: "bamboo", number: 5, copy_no: 2 };
+        const shownTile1 = { id: 9950, type: "bamboo", number: 2, copy_no: 4 };
+        await redis.lpush(WALL_KEY(roomId), JSON.stringify(shownTile2));
+        await redis.lpush(WALL_KEY(roomId), JSON.stringify(shownTile1));
 
-          await redis.del(HAND_KEY(roomId, secondPlayer.userId));
-          for (const tile of testTilesUser2) {
-            await redis.rpush(HAND_KEY(roomId, secondPlayer.userId), JSON.stringify(tile));
-          }
-        }
+        // Also inject a replacement tile for when shown tile is taken
+        // When bamboo2 is taken from shown, it gets replaced by next wall tile
+        // That replacement should be bamboo5 so second shown tile offering has bamboo5
+        const replacementTile = { id: 9952, type: "bamboo", number: 5, copy_no: 3 };
+        await redis.lpush(WALL_KEY(roomId), JSON.stringify(replacementTile));
 
         // Rebuild player view for all players with test tiles
         for (const currentPlayer of playersTest) {
@@ -1222,6 +1216,9 @@ export default class MahJongRoomManager {
           await redis.set(PLAYER_VIEW_HAND_KEY(roomId, currentPlayer.userId), JSON.stringify(handState));
           io.to(`user:${currentPlayer.userId}`).emit("mahjong:initial_hand_state", handState);
         }
+
+        // Reveal shown tiles (pops first 2 from wall = bamboo2 + bamboo5)
+        await MahJongRoomManager.revealShownTiles(roomId, io);
       }
     }
     // ========== END TEMPORARY TEST CODE ==========

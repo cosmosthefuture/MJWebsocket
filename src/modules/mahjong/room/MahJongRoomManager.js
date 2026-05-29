@@ -1339,6 +1339,7 @@ export default class MahJongRoomManager {
           const parsedTile = lastTile ? JSON.parse(lastTile) : null;
 
           io.to(`user:${userId}`).emit("mahjong:remove_kong_decision");
+          io.to(`user:${userId}`).emit("mahjong:remove_win_decision");
 
           await this.discardTile(
             socket,
@@ -1820,6 +1821,10 @@ export default class MahJongRoomManager {
           !already_discard_tile_raw ||
           already_discard_tile?.discard_by !== userId
         ) {
+          // Remove pending decisions
+          io.to(`user:${userId}`).emit("mahjong:remove_kong_decision");
+          io.to(`user:${userId}`).emit("mahjong:remove_win_decision");
+
           // Auto-pass shown tile if still waiting
           const waitingDecision = await redis.get(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
           if (waitingDecision) {
@@ -2118,6 +2123,9 @@ export default class MahJongRoomManager {
           !already_discard_tile_raw ||
           already_discard_tile?.discard_by !== userId
         ) {
+          io.to(`user:${userId}`).emit("mahjong:remove_kong_decision");
+          io.to(`user:${userId}`).emit("mahjong:remove_win_decision");
+
           const lastTile = await redis.lindex(HAND_KEY(roomId, userId), -1);
 
           const parsedTile = lastTile ? JSON.parse(lastTile) : null;

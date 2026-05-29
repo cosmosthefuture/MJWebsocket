@@ -947,39 +947,23 @@ export default class MahJongRoomManager {
     await redis.del(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
     console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win and kong...`);
     
-    // 14. Check if another Kong is possible with the new tile (reads directly from HAND_KEY)
-    console.log(`[takeShownTile] About to call checkKongExist for user:${userId} room:${roomId}`);
-    const handBeforeKongCheck = await redis.lrange(HAND_KEY(roomId, userId), 0, -1);
-    const tilesBeforeKongCheck = handBeforeKongCheck.map(t => {
-      const p = JSON.parse(t);
-      return `${p.type}_${p.number}`;
-    });
-    const tileCountMap = {};
-    tilesBeforeKongCheck.forEach(t => { tileCountMap[t] = (tileCountMap[t] || 0) + 1; });
-    const kongCandidates = Object.entries(tileCountMap).filter(([k, v]) => v >= 4);
-    console.log(`[takeShownTile] Direct HAND_KEY read - tile count: ${handBeforeKongCheck.length}, kong candidates:`, kongCandidates);
-    
-    const newKongData = await this.checkKongExist(roomId, userId);
-    console.log(`[takeShownTile] Kong check result:`, JSON.stringify(newKongData.canKong), JSON.stringify(newKongData.groups?.map(g => g.tileKey)));
+    // 14. Check if another Kong is possible with the new tile
+    const newKongData = await MahJongRoomManager.checkKongExist(roomId, userId);
+    console.log(`[takeShownTile] Kong check:`, newKongData.canKong);
     if (newKongData.canKong) {
       io.to(`user:${userId}`).emit('mahjong:can_kong', {
         canKong: true,
         groups: newKongData.groups,
       });
-      console.log(`[takeShownTile] *** EMITTED can_kong to user:${userId} ***`);
-    } else {
-      console.log(`[takeShownTile] No kong possible, skipping can_kong emit`);
     }
 
     // 15. Check if player can win with the taken shown tile
     let winResult = { canWin: false };
     try {
-      winResult = await this.checkWinningHand(roomId, userId);
+      winResult = await MahJongRoomManager.checkWinningHand(roomId, userId);
     } catch (err) {
       console.error(`[takeShownTile] Win check error:`, err.message);
     }
-    console.log(`[takeShownTile] Win check:`, winResult.canWin);
-
     if (winResult.canWin) {
       io.to(`user:${userId}`).emit("mahjong:ask_win_decision", {
         message: "You can win with the shown tile!",

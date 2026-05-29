@@ -16,6 +16,8 @@ const GUESTS_KEY = (roomId) => `room:${roomId}:guests`;
 
 const PLAYER_ROOM_KEY = (userId) => `player:${userId}`;
 
+const GAME_END_KEY = (roomId) => `room:${roomId}:game_end`;
+
 const ROOM_STATUS_KEY = (roomId) => `room:${roomId}:status`;
 const ROOM_PLAYING_PHASE_KEY = (roomId) => `room:${roomId}:phase`;
 const PLAYING_PHASE_WITH_TILE_KEY = (roomId) =>
@@ -1094,6 +1096,13 @@ export default class MahJongRoomManager {
   }
 
   static async startPlayerTurn(socket, roomId, userId, io) {
+    // Check if round end was signaled
+    const endStatus = await redis.get(GAME_END_KEY(roomId));
+    if (endStatus) {
+      await MahJongRoomManager.endRound(roomId, io);
+      return;
+    }
+
     // Reset consecutive shown tiles counter at turn start
     await redis.del(SHOWN_TILES_TAKEN_THIS_TURN_KEY(roomId, userId));
     
@@ -4102,6 +4111,13 @@ export default class MahJongRoomManager {
 
 
   static async startNextTurn(socket, roomId, io) {
+    // Check if round end was signaled
+    const endStatus = await redis.get(GAME_END_KEY(roomId));
+    if (endStatus) {
+      await MahJongRoomManager.endRound(roomId, io);
+      return;
+    }
+
     const currentTurnUserId = await redis.get(CURRENT_TURN_PLAYER_KEY(roomId));
 
     const roundPlayersRaw = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
@@ -6162,7 +6178,7 @@ console.log("IS DECLINED::", isDeclined);
   // ================= TEMPORARY END ROUND =================
   static async temporaryEndRound(socket, payload, io) {
     const { roomId } = payload;
-    await MahJongRoomManager.endRound(roomId, io);
+    await redis.set(GAME_END_KEY(roomId), "end_game");
   }
 
   // ================= Temporary Function =================
@@ -6259,6 +6275,7 @@ console.log("IS DECLINED::", isDeclined);
       redis.del(PAYOUT_DATA_KEY(roomId)),
       redis.del(START_ROUND_READY_KEY(roomId)),
       redis.del(WAITING_SHOWN_TILE_DECISION_KEY(roomId)),
+      redis.del(GAME_END_KEY(roomId)),
 
     ]);
 

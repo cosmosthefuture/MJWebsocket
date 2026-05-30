@@ -1569,6 +1569,9 @@ export default class MahJongRoomManager {
          */
         const waitingShownTile = await redis.get(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
         if (waitingShownTile && String(waitingShownTile) === String(userId)) {
+          // Emit remove shown tile dialog
+          io.to(`user:${userId}`).emit('mahjong:remove_shown_tile_decision');
+          
           // Auto-pass: draw extra tile from wall
           await redis.del(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
           const extraTileRaw = await redis.lpop(WALL_KEY(roomId));

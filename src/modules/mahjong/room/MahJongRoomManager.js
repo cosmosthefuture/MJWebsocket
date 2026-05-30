@@ -1389,7 +1389,7 @@ export default class MahJongRoomManager {
     //    SHOWN_TILES_TAKEN counter = 3
     // 7. Accept win -> payout: pure + shown-tile 3rd time = 20 * 2^(3-1) = 80x
     // TO UNCOMMENT: Remove the /* */ block comments to activate this test
-    
+    /*
     const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
     const firstPlayerData = firstPlayerRaw ? JSON.parse(firstPlayerRaw) : null;
     const roundPlayersRawTest = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
@@ -1488,6 +1488,7 @@ export default class MahJongRoomManager {
         await MahJongRoomManager.revealShownTiles(roomId, io);
       }
     }
+    */
     // ========== END TEMPORARY TEST CODE: 80x MULTIPLIER ==========
 
     const duration = 30;

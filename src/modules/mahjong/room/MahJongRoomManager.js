@@ -1234,20 +1234,18 @@ export default class MahJongRoomManager {
     // ========== END TEMPORARY TEST CODE ==========
 
     // ========== TEMPORARY TEST CODE: PONG INTERRUPT ==========
-    // Test scenario (3 players):
-    // - Player 2 has 2x bamboo5 and 2x dot7 (two pairs for pong interrupt)
-    // - Player 3 has bamboo5 and dot7 as last tiles to discard
+    // Test scenario (3 players, seat order: player1 -> player2 -> player3):
+    // - Player 1 (first turn): has bamboo5 as last tile to discard
+    // - Player 3: has 2x bamboo5 + 2x dot7 (can pong from player1's bamboo5 discard)
+    // - Player 2: has dot7 as last tile (for second pong test later)
     // Flow:
-    // 1. Player 1 turn -> auto discard
-    // 2. Player 2 turn (startNextTurn) -> auto discard
-    // 3. Player 3 turn -> discard bamboo5
-    // 4. handleAfterDiscard: next=player1, newTargetPlayers=[player2]
-    // 5. Player 2 can interrupt pong with bamboo5 -> can_interrupt_pong emitted
-    // 6. Player 2 accepts pong -> becomes current turn player -> discard
-    // 7. Player 3 turn again -> discard dot7
-    // 8. Player 2 can interrupt pong with dot7 -> can_interrupt_pong emitted
+    // 1. Player 1 discards bamboo5 (within 12s)
+    // 2. handleAfterDiscard: next=player2, newTargetPlayers=[player3]
+    // 3. Player 3 has 2x bamboo5 -> can_interrupt_pong emitted to player3
+    // 4. Player 3 accepts pong -> new countdown starts for player3
+    // 5. Player 1's countdown already stopped (discarded)
     // TO UNCOMMENT: Remove the /* */ block comments to activate this test
-    
+    /*
     const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
     const firstPlayerData = firstPlayerRaw ? JSON.parse(firstPlayerRaw) : null;
     const roundPlayersRawTest = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
@@ -1266,52 +1264,76 @@ export default class MahJongRoomManager {
         const secondPlayer = playersTest[secondIdx];
         const thirdPlayer = playersTest[thirdIdx];
 
-        // === PLAYER 2: has 2x bamboo5 + 2x dot7 + other tiles (13 tiles) ===
-        const testTilesUser2 = [
-          // 2x bamboo 5 (for pong when player 3 discards bamboo 5)
-          { id: 8801, type: "bamboo", number: 5, copy_no: 1 },
-          { id: 8802, type: "bamboo", number: 5, copy_no: 2 },
-          // 2x dot 7 (for pong when player 3 discards dot 7)
-          { id: 8803, type: "dot", number: 7, copy_no: 1 },
-          { id: 8804, type: "dot", number: 7, copy_no: 2 },
-          // Other tiles
-          { id: 8805, type: "dot", number: 1, copy_no: 1 },
-          { id: 8806, type: "dot", number: 2, copy_no: 1 },
-          { id: 8807, type: "dot", number: 3, copy_no: 1 },
-          { id: 8808, type: "bamboo", number: 1, copy_no: 1 },
-          { id: 8809, type: "bamboo", number: 2, copy_no: 1 },
-          { id: 8810, type: "bamboo", number: 3, copy_no: 1 },
-          { id: 8811, type: "dot", number: 8, copy_no: 1 },
-          { id: 8812, type: "dot", number: 9, copy_no: 1 },
-          { id: 8813, type: "bamboo", number: 9, copy_no: 1 },
+        // === PLAYER 1 (first turn): has bamboo5 as last tile to discard ===
+        const testTilesUser1 = [
+          { id: 9901, type: "dot", number: 1, copy_no: 1 },
+          { id: 9902, type: "dot", number: 2, copy_no: 1 },
+          { id: 9903, type: "dot", number: 3, copy_no: 1 },
+          { id: 9904, type: "dot", number: 4, copy_no: 1 },
+          { id: 9905, type: "dot", number: 5, copy_no: 1 },
+          { id: 9906, type: "dot", number: 6, copy_no: 1 },
+          { id: 9907, type: "dot", number: 7, copy_no: 1 },
+          { id: 9908, type: "dot", number: 8, copy_no: 1 },
+          { id: 9909, type: "dot", number: 9, copy_no: 1 },
+          { id: 9910, type: "dot", number: 1, copy_no: 2 },
+          { id: 9911, type: "dot", number: 2, copy_no: 2 },
+          { id: 9912, type: "dot", number: 3, copy_no: 2 },
+          { id: 9913, type: "dot", number: 4, copy_no: 2 },
+          // Last tile: bamboo 5 - discard this so player 3 can pong
+          { id: 9914, type: "bamboo", number: 5, copy_no: 4 },
         ];
 
-        await redis.del(HAND_KEY(roomId, secondPlayer.userId));
-        for (const tile of testTilesUser2) {
-          await redis.rpush(HAND_KEY(roomId, secondPlayer.userId), JSON.stringify(tile));
+        await redis.del(HAND_KEY(roomId, firstUserId));
+        for (const tile of testTilesUser1) {
+          await redis.rpush(HAND_KEY(roomId, firstUserId), JSON.stringify(tile));
         }
 
-        // === PLAYER 3: has bamboo5 and dot7 as last tiles to discard (13 tiles) ===
+        // === PLAYER 3: has 2x bamboo5 + 2x dot7 (for pong interrupts) + other tiles ===
         const testTilesUser3 = [
-          { id: 8901, type: "dot", number: 1, copy_no: 2 },
-          { id: 8902, type: "dot", number: 2, copy_no: 2 },
-          { id: 8903, type: "dot", number: 3, copy_no: 2 },
-          { id: 8904, type: "dot", number: 4, copy_no: 1 },
-          { id: 8905, type: "dot", number: 5, copy_no: 1 },
-          { id: 8906, type: "dot", number: 6, copy_no: 1 },
-          { id: 8907, type: "bamboo", number: 6, copy_no: 1 },
-          { id: 8908, type: "bamboo", number: 7, copy_no: 1 },
-          { id: 8909, type: "bamboo", number: 8, copy_no: 1 },
-          { id: 8910, type: "dot", number: 4, copy_no: 2 },
-          { id: 8911, type: "dot", number: 5, copy_no: 2 },
-          // Last 2 tiles: bamboo5 and dot7 to discard for player 2 to pong
-          { id: 8912, type: "bamboo", number: 5, copy_no: 3 },
-          { id: 8913, type: "dot", number: 7, copy_no: 3 },
+          // 2x bamboo 5 (for pong when player 1 discards bamboo 5)
+          { id: 8901, type: "bamboo", number: 5, copy_no: 1 },
+          { id: 8902, type: "bamboo", number: 5, copy_no: 2 },
+          // 2x dot 7 (for second pong test)
+          { id: 8903, type: "dot", number: 7, copy_no: 1 },
+          { id: 8904, type: "dot", number: 7, copy_no: 2 },
+          // Other tiles
+          { id: 8905, type: "bamboo", number: 1, copy_no: 1 },
+          { id: 8906, type: "bamboo", number: 2, copy_no: 1 },
+          { id: 8907, type: "bamboo", number: 3, copy_no: 1 },
+          { id: 8908, type: "dot", number: 1, copy_no: 3 },
+          { id: 8909, type: "dot", number: 2, copy_no: 3 },
+          { id: 8910, type: "dot", number: 3, copy_no: 3 },
+          { id: 8911, type: "bamboo", number: 8, copy_no: 1 },
+          { id: 8912, type: "bamboo", number: 9, copy_no: 1 },
+          { id: 8913, type: "dot", number: 9, copy_no: 2 },
         ];
 
         await redis.del(HAND_KEY(roomId, thirdPlayer.userId));
         for (const tile of testTilesUser3) {
           await redis.rpush(HAND_KEY(roomId, thirdPlayer.userId), JSON.stringify(tile));
+        }
+
+        // === PLAYER 2: has dot7 as one of tiles (for second pong test) + other tiles ===
+        const testTilesUser2 = [
+          { id: 8801, type: "dot", number: 4, copy_no: 2 },
+          { id: 8802, type: "dot", number: 5, copy_no: 2 },
+          { id: 8803, type: "dot", number: 6, copy_no: 2 },
+          { id: 8804, type: "bamboo", number: 4, copy_no: 1 },
+          { id: 8805, type: "bamboo", number: 5, copy_no: 3 },
+          { id: 8806, type: "bamboo", number: 6, copy_no: 1 },
+          { id: 8807, type: "bamboo", number: 7, copy_no: 1 },
+          { id: 8808, type: "dot", number: 8, copy_no: 2 },
+          { id: 8809, type: "dot", number: 9, copy_no: 3 },
+          { id: 8810, type: "bamboo", number: 8, copy_no: 2 },
+          { id: 8811, type: "bamboo", number: 9, copy_no: 2 },
+          { id: 8812, type: "dot", number: 6, copy_no: 3 },
+          // dot 7 for second pong test
+          { id: 8813, type: "dot", number: 7, copy_no: 3 },
+        ];
+
+        await redis.del(HAND_KEY(roomId, secondPlayer.userId));
+        for (const tile of testTilesUser2) {
+          await redis.rpush(HAND_KEY(roomId, secondPlayer.userId), JSON.stringify(tile));
         }
 
         // Rebuild player view for all players with test tiles
@@ -1349,8 +1371,124 @@ export default class MahJongRoomManager {
         }
       }
     }
-    
+    */
     // ========== END TEMPORARY TEST CODE: PONG INTERRUPT ==========
+
+    // ========== TEMPORARY TEST CODE: 80x MULTIPLIER (PURE + SHOWN TILE 3RD TIME) ==========
+    // Test scenario (3 players, first player = player 2 by dice):
+    // Hand: 4x bamboo1 + 3x bamboo2 + 3x bamboo3 + bamboo5,6 + bamboo7,7 (14 tiles, all bamboo)
+    // Flow:
+    // 1. Kong bamboo1 -> afterKong -> shown tiles [bamboo2, bamboo4]
+    // 2. Take bamboo2 -> hand: 4x bamboo2 + 3x bamboo3 + bamboo5,6 + bamboo7,7 (can't win, can kong)
+    //    SHOWN_TILES_TAKEN counter = 1
+    // 3. Kong bamboo2 -> afterKong -> shown tiles [bamboo3, ...]
+    // 4. Take bamboo3 -> hand: 4x bamboo3 + bamboo5,6 + bamboo7,7 (can't win, can kong)
+    //    SHOWN_TILES_TAKEN counter = 2
+    // 5. Kong bamboo3 -> afterKong -> shown tiles [bamboo4, ...]
+    // 6. Take bamboo4 -> hand: bamboo4,5,6 + bamboo7,7 (WIN! pure bamboo)
+    //    SHOWN_TILES_TAKEN counter = 3
+    // 7. Accept win -> payout: pure + shown-tile 3rd time = 20 * 2^(3-1) = 80x
+    // TO UNCOMMENT: Remove the /* */ block comments to activate this test
+    
+    const firstPlayerRaw = await redis.get(ROOM_FIRST_PLAYER_KEY(roomId));
+    const firstPlayerData = firstPlayerRaw ? JSON.parse(firstPlayerRaw) : null;
+    const roundPlayersRawTest = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
+    const playersTest = Object.values(roundPlayersRawTest)
+      .map(JSON.parse)
+      .sort((a, b) => a.seat - b.seat);
+
+    if (firstPlayerData) {
+      const firstUserId = firstPlayerData.user_id;
+
+      if (String(userId) === String(firstUserId)) {
+        const testTilesUser1 = [
+          // 4x bamboo 1 (1st kong)
+          { id: 9901, type: "bamboo", number: 1, copy_no: 1 },
+          { id: 9902, type: "bamboo", number: 1, copy_no: 2 },
+          { id: 9903, type: "bamboo", number: 1, copy_no: 3 },
+          { id: 9904, type: "bamboo", number: 1, copy_no: 4 },
+          // 3x bamboo 2 (becomes 4 after taking shown bamboo2 -> 2nd kong)
+          { id: 9905, type: "bamboo", number: 2, copy_no: 1 },
+          { id: 9906, type: "bamboo", number: 2, copy_no: 2 },
+          { id: 9907, type: "bamboo", number: 2, copy_no: 3 },
+          // 3x bamboo 3 (becomes 4 after taking shown bamboo3 -> 3rd kong)
+          { id: 9908, type: "bamboo", number: 3, copy_no: 1 },
+          { id: 9909, type: "bamboo", number: 3, copy_no: 2 },
+          { id: 9910, type: "bamboo", number: 3, copy_no: 3 },
+          // bamboo 5, 6 (part of seq 4,5,6 after taking shown bamboo4)
+          { id: 9911, type: "bamboo", number: 5, copy_no: 1 },
+          { id: 9912, type: "bamboo", number: 6, copy_no: 1 },
+          // bamboo 7, 7 (pair)
+          { id: 9913, type: "bamboo", number: 7, copy_no: 1 },
+          { id: 9914, type: "bamboo", number: 7, copy_no: 2 },
+        ];
+
+        await redis.del(HAND_KEY(roomId, firstUserId));
+        for (const tile of testTilesUser1) {
+          await redis.rpush(HAND_KEY(roomId, firstUserId), JSON.stringify(tile));
+        }
+
+        // Inject tiles into wall for shown tiles and replacements
+        // revealShownTiles pops 2 from left for initial shown tiles
+        // takeShownTile pops 1 from left as replacement each time taken
+        // Order of lpush (last pushed = first popped):
+        // Need: initial shown = [bamboo2, bamboo4]
+        //       1st replacement (when bamboo2 taken) = bamboo3
+        //       2nd replacement (when bamboo3 taken from updated shown) = bamboo4
+        //       3rd replacement (when bamboo4 taken) = anything
+        const wallTiles = [
+          { id: 9960, type: "bamboo", number: 9, copy_no: 4 },  // 3rd replacement
+          { id: 9959, type: "bamboo", number: 4, copy_no: 2 },  // 2nd replacement (bamboo4)
+          { id: 9958, type: "bamboo", number: 3, copy_no: 4 },  // 1st replacement (bamboo3)
+          { id: 9951, type: "bamboo", number: 4, copy_no: 1 },  // initial shown tile 2 (bamboo4)
+          { id: 9950, type: "bamboo", number: 2, copy_no: 4 },  // initial shown tile 1 (bamboo2)
+        ];
+        // lpush in reverse so first item in array is first popped
+        for (let i = wallTiles.length - 1; i >= 0; i--) {
+          await redis.lpush(WALL_KEY(roomId), JSON.stringify(wallTiles[i]));
+        }
+
+        // Rebuild player view for all players with test tiles
+        const roundPlayersRawT2 = await redis.hgetall(ROUND_PLAYERS_KEY(roomId));
+        const playersT2 = Object.values(roundPlayersRawT2).map(JSON.parse).sort((a, b) => a.seat - b.seat);
+        for (const currentPlayer of playersT2) {
+          const handState = [];
+          for (const targetPlayer of playersT2) {
+            const rawPlayerTiles = await redis.lrange(HAND_KEY(roomId, targetPlayer.userId), 0, -1);
+            const parsedTiles = rawPlayerTiles.map((tile) => JSON.parse(tile));
+            const rawKong = await redis.lrange(KONG_KEY(roomId, targetPlayer.userId), 0, -1);
+            const rawPong = await redis.lrange(PONG_KEY(roomId, targetPlayer.userId), 0, -1);
+            const rawChow = await redis.lrange(CHOW_KEY(roomId, targetPlayer.userId), 0, -1);
+            const kongDataT = rawKong.map((item) => JSON.parse(item));
+            const pongDataT = rawPong.map((item) => JSON.parse(item));
+            const chowDataT = rawChow.map((item) => JSON.parse(item));
+            const ownDiscardTilesRaw = await redis.lrange(PLAYER_DISCARD_TILES_KEY(roomId, targetPlayer.userId), 0, -1);
+            const ownDiscardTiles = ownDiscardTilesRaw.map(JSON.parse);
+
+            if (Number(currentPlayer.userId) === Number(targetPlayer.userId)) {
+              handState.push({
+                last_discard_tile: null, pong: pongDataT, chow: chowDataT, kong: kongDataT,
+                discarded_tiles: ownDiscardTiles, userId: targetPlayer.userId, user_name: targetPlayer.name,
+                isSelf: true, seat_position: targetPlayer.seat, tileCount: parsedTiles.length, tiles: parsedTiles,
+              });
+            } else {
+              handState.push({
+                last_discard_tile: null, pong: pongDataT, chow: chowDataT, kong: kongDataT,
+                discarded_tiles: ownDiscardTiles, userId: targetPlayer.userId, user_name: targetPlayer.name,
+                isSelf: false, seat_position: targetPlayer.seat, tileCount: parsedTiles.length,
+                tiles: Array.from({ length: parsedTiles.length }, () => ({ id: null, type: "hidden", number: null, copy_no: null })),
+              });
+            }
+          }
+          await redis.set(PLAYER_VIEW_HAND_KEY(roomId, currentPlayer.userId), JSON.stringify(handState));
+          io.to(`user:${currentPlayer.userId}`).emit("mahjong:initial_hand_state", handState);
+        }
+
+        // Reveal shown tiles (pops first 2 from wall = bamboo2 + bamboo4)
+        await MahJongRoomManager.revealShownTiles(roomId, io);
+      }
+    }
+    // ========== END TEMPORARY TEST CODE: 80x MULTIPLIER ==========
 
     const duration = 30;
 

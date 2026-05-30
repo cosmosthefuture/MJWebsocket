@@ -744,12 +744,13 @@ export default class MahJongRoomManager {
 
   // ================= REVEAL SHOWN TILES =================
   static async revealShownTiles(roomId, io) {
-    // Take 2 tiles from wall
-    const tile1Raw = await redis.lpop(WALL_KEY(roomId));
-    const tile2Raw = await redis.lpop(WALL_KEY(roomId));
+    // Take 2 tiles from wall (discard them, we'll override)
+    await redis.lpop(WALL_KEY(roomId));
+    await redis.lpop(WALL_KEY(roomId));
     
-    const tile1 = JSON.parse(tile1Raw);
-    const tile2 = JSON.parse(tile2Raw);
+    // TEST OVERRIDE: hardcode shown tiles to bamboo 2 and bamboo 3
+    const tile1 = { id: 9901, type: "bamboo", number: 2, copy_no: 1 };
+    const tile2 = { id: 9902, type: "bamboo", number: 3, copy_no: 1 };
     
     const shownTiles = [tile1, tile2];
     

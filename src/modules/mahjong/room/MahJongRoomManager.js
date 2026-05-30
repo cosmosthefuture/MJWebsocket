@@ -744,13 +744,12 @@ export default class MahJongRoomManager {
 
   // ================= REVEAL SHOWN TILES =================
   static async revealShownTiles(roomId, io) {
-    // Take 2 tiles from wall (discard them, we'll override)
-    await redis.lpop(WALL_KEY(roomId));
-    await redis.lpop(WALL_KEY(roomId));
+    // Take 2 tiles from wall
+    const tile1Raw = await redis.lpop(WALL_KEY(roomId));
+    const tile2Raw = await redis.lpop(WALL_KEY(roomId));
     
-    // TEST OVERRIDE: hardcode shown tiles to bamboo 2 and bamboo 3
-    const tile1 = { id: 9901, type: "bamboo", number: 2, copy_no: 1 };
-    const tile2 = { id: 9902, type: "bamboo", number: 3, copy_no: 1 };
+    const tile1 = JSON.parse(tile1Raw);
+    const tile2 = JSON.parse(tile2Raw);
     
     const shownTiles = [tile1, tile2];
     
@@ -768,11 +767,11 @@ export default class MahJongRoomManager {
   // ================= TAKE SHOWN TILE =================
   static async takeShownTile(socket, payload, io) {
     const { roomId, userId, tileIndex } = payload;
-    console.log(`[takeShownTile] Called with roomId:${roomId}, userId:${userId}, tileIndex:${tileIndex}`);
+    // console.log(`[takeShownTile] Called with roomId:${roomId}, userId:${userId}, tileIndex:${tileIndex}`);
 
     // 1. Validate player has at least one Kong
     const kongData = await redis.lrange(KONG_KEY(roomId, userId), 0, -1);
-    console.log(`[takeShownTile] Kong count for user ${userId}:`, kongData.length);
+    // console.log(`[takeShownTile] Kong count for user ${userId}:`, kongData.length);
     if (kongData.length === 0) {
       io.to(`user:${userId}`).emit("mahjong:error", { message: "Must have Kong to take shown tile" });
       return;
@@ -811,7 +810,7 @@ export default class MahJongRoomManager {
 
     // 7. Add taken tile to player's hand
     await redis.rpush(HAND_KEY(roomId, userId), JSON.stringify(takenTile));
-    console.log(`[takeShownTile] Added tile to hand:`, takenTile, `for user:`, userId);
+    // console.log(`[takeShownTile] Added tile to hand:`, takenTile, `for user:`, userId);
     
     // Debug: verify hand contents after adding tile
     const debugHandTiles = await redis.lrange(HAND_KEY(roomId, userId), 0, -1);
@@ -822,7 +821,7 @@ export default class MahJongRoomManager {
       debugMap[k] = (debugMap[k] || 0) + 1;
     }
     const debugKongKeys = Object.entries(debugMap).filter(([k, v]) => v >= 4).map(([k]) => k);
-    console.log(`[takeShownTile] Hand tile count: ${debugParsed.length}, possible kongs:`, debugKongKeys);
+    // console.log(`[takeShownTile] Hand tile count: ${debugParsed.length}, possible kongs:`, debugKongKeys);
 
     // 8. Increment SHOWN_TILES_TAKEN_THIS_TURN_KEY counter
     await redis.incr(SHOWN_TILES_TAKEN_THIS_TURN_KEY(roomId, userId));
@@ -946,11 +945,11 @@ export default class MahJongRoomManager {
 
     // 13. Clear the waiting for shown tile decision state
     await redis.del(WAITING_SHOWN_TILE_DECISION_KEY(roomId));
-    console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win and kong...`);
+    // console.log(`[takeShownTile] Hand rebuilt and emitted. Checking win and kong...`);
     
     // 14. Check if another Kong is possible with the new tile
     const newKongData = await MahJongRoomManager.checkKongExist(roomId, userId);
-    console.log(`[takeShownTile] Kong check:`, newKongData.canKong);
+    // console.log(`[takeShownTile] Kong check:`, newKongData.canKong);
     if (newKongData.canKong) {
       io.to(`user:${userId}`).emit('mahjong:can_kong', {
         canKong: true,
@@ -963,7 +962,7 @@ export default class MahJongRoomManager {
     try {
       winResult = await MahJongRoomManager.checkWinningHand(roomId, userId);
     } catch (err) {
-      console.error(`[takeShownTile] Win check error:`, err.message);
+      // console.error(`[takeShownTile] Win check error:`, err.message);
     }
     if (winResult.canWin) {
       io.to(`user:${userId}`).emit("mahjong:ask_win_decision", {
@@ -4672,7 +4671,7 @@ export default class MahJongRoomManager {
           WIN_DECLINE_PLAYER_IDS_KEY(roomId),
           nextPlayer.userId,
         )) === 1;
-console.log("IS DECLINED::", isDeclined);
+// console.log("IS DECLINED::", isDeclined);
       if(isDeclined) {
         io.to(`user:${nextPlayer.userId}`).emit("mahjong:remove_win_decision");
         // No chow from discard in Loukkai Mahjong
